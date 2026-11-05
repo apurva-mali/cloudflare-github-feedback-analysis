@@ -96,6 +96,18 @@ describe('syncHackerNews (fake bindings)', () => {
 		expect(env.DB._db.prepare('SELECT COUNT(*) AS n FROM feedback').get().n).toBe(4);
 	});
 
+	it('handles a large batch of hits without exceeding D1 parameter limits', async () => {
+		const many = Array.from({ length: 250 }, (_, i) => hnHit(i + 1, { comment_text: 'cloudflare lol' }));
+		mockHnFetch({ 'Cloudflare R2': many });
+		// First run: everything is keyword-filtered (no AI), recorded in skipped_items
+		const r1 = await syncHackerNews(env);
+		expect(r1).toMatchObject({ fetched: 250, filtered_keyword: 250, created: 0 });
+		// Second run re-fetches from the cursor and must look up hundreds of known ids safely
+		const r2 = await syncHackerNews(env);
+		expect(r2.already_known).toBeGreaterThan(0);
+		expect(env.AI.calls.text).toBe(0);
+	});
+
 	it('keeps the cursor when the HN API is down', async () => {
 		globalThis.fetch = async () => new Response('boom', { status: 503 });
 		const r = await syncHackerNews(env);

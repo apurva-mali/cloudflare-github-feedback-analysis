@@ -140,19 +140,22 @@ function parseQueries(env) {
 	return list.map((q) => q.trim()).filter(Boolean);
 }
 
+// D1 allows at most 100 bound parameters per query.
+const D1_MAX_PARAMS = 100;
+
 /** external_ids from `ids` that are already stored or already rejected. */
 async function findKnown(env, ids) {
 	const known = new Set();
-	for (let i = 0; i < ids.length; i += 90) {
-		const chunk = ids.slice(i, i + 90);
-		const ph = chunk.map(() => '?').join(',');
-		const { results } = await env.DB.prepare(
-			`SELECT external_id FROM feedback WHERE external_id IN (${ph})
-			 UNION SELECT external_id FROM skipped_items WHERE external_id IN (${ph})`
-		)
-			.bind(...chunk, ...chunk)
-			.all();
-		for (const r of results) known.add(r.external_id);
+	for (const table of ['feedback', 'skipped_items']) {
+		for (let i = 0; i < ids.length; i += D1_MAX_PARAMS) {
+			const chunk = ids.slice(i, i + D1_MAX_PARAMS);
+			const { results } = await env.DB.prepare(
+				`SELECT external_id FROM ${table} WHERE external_id IN (${chunk.map(() => '?').join(',')})`
+			)
+				.bind(...chunk)
+				.all();
+			for (const r of results) known.add(r.external_id);
+		}
 	}
 	return known;
 }

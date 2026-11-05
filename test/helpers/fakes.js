@@ -14,7 +14,11 @@ export function createFakeD1() {
 	db.exec(SCHEMA);
 
 	const makeStmt = (sql, params = []) => ({
-		bind: (...p) => makeStmt(sql, p),
+		bind: (...p) => {
+			// Match D1's real limit so tests catch oversized IN (...) lists.
+			if (p.length > 100) throw new Error(`D1_ERROR: too many SQL variables (${p.length} > 100)`);
+			return makeStmt(sql, p);
+		},
 		async all() {
 			return { results: db.prepare(sql).all(...params) };
 		},
