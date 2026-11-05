@@ -4,6 +4,7 @@
  * Routes
  *   GET    /all                     all feedback rows (dashboard)
  *   GET    /search?q=               semantic search via Vectorize
+ *   GET    /themes                  groups of similar feedback
  *   GET    /products/summaries      cached AI summary per product
  *   POST   /products/summaries/refresh  rewrite stale summaries now (throttled)
  *   PATCH  /feedback/:id            status, dismiss, star, reviewed, highlight tags, replied
@@ -15,11 +16,11 @@
  *   POST   /tickets                 raise a ticket from a feedback item
  *   PATCH  /tickets/:id             update status / priority / assignee / team
  *   GET    /sync/status             last sync result per stream
- *   POST   /sync/:source            github | hackernews | relevance | summaries | all   (admin)
+ *   POST   /sync/:source            github | hackernews | relevance | themes | summaries | all   (admin)
  *                                   ?max=N  per-run cap, ?since_days=N  GitHub one-off backfill
  *   POST   /ingest                  ingest one manual feedback item             (admin)
  *
- * Cron: hourly → GitHub, Hacker News, relevance clean-up, product summaries.
+ * Cron: hourly → GitHub, Hacker News, relevance clean-up, themes, product summaries.
  */
 
 import { CORS_HEADERS, json, isAuthorized } from './http.js';
@@ -27,6 +28,7 @@ import { analyzeFeedback, buildRecord, storeRecords, EMBEDDING_MODEL } from './p
 import { syncGitHub } from './github.js';
 import { syncHackerNews } from './hackernews.js';
 import { syncRelevance } from './relevance.js';
+import { syncThemes, listThemes } from './themes.js';
 import { refreshSummaries, listSummaries } from './products.js';
 import { listTickets, createTicket, updateTicket } from './tickets.js';
 import { updateFeedback, bulkUpdateFeedback, listNotes, addNote, deleteNote } from './feedback.js';
@@ -36,6 +38,7 @@ const SYNCS = {
 	github: syncGitHub,
 	hackernews: syncHackerNews,
 	relevance: syncRelevance,
+	themes: syncThemes,
 	summaries: refreshSummaries,
 };
 const SOURCE_SYNCS = new Set(['github', 'hackernews']);
@@ -171,6 +174,7 @@ export default {
 			const noteMatch = path.match(/^\/notes\/(\d+)$/);
 			if (noteMatch && method === 'DELETE') return await deleteNote(Number(noteMatch[1]), env);
 
+			if (method === 'GET' && path === '/themes') return await listThemes(env);
 			if (method === 'GET' && path === '/products/summaries') return await listSummaries(env);
 			if (method === 'POST' && path === '/products/summaries/refresh') return json(await refreshSummaries(env));
 

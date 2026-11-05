@@ -11,9 +11,10 @@ A copy of the [Cloudflare Voice feedback dashboard](https://github.com/apurva-ma
 |---|---|
 | **Overview** | Sentiment index with change vs the previous period and a clickable balance bar; key numbers with sparklines; feedback over time; a rolling sentiment trend (green above zero, red below); sentiment by product as diverging bars (complaints left, praise right); what people talk about; "Needs attention" and "What people like" |
 | **Feedback** | Every item, with quick views: **All**, **To review**, **Starred**, **Dismissed**. Sort, filter, search by exact words or *similar meaning* (Vectorize). Open an item and triage from the keyboard: `j`/`k` next and previous, `r` reviewed (moves on), `s` star, `t` ticket, `x` resolve, `d` dismiss, `h` highlight, `o` open the original |
-| **Highlights** | A library of praise saved with a purpose: *Customer story*, *Launch quote*, *Team shout-out*, *Competitive win*. Copy a quote with attribution and link in one click |
+| **Themes** | Feedback about the same thing, grouped automatically (e.g. three reports of the same R2 ETag bug), with an AI-written title. Only items about the same product are grouped |
 | **Products** | One card per product: sentiment, counts, urgent items, open tickets, and an **AI summary** of what developers are saying (Workers AI, last 30 days) |
 | **Tickets** | Support tickets (CV-1, CV-2, …) with inline priority, assignee and status. Resolving a ticket resolves its feedback. "Author not told" lists resolved tickets nobody has replied about yet |
+| **Highlights** | A library of praise saved with a purpose: *Customer story*, *Launch quote*, *Team shout-out*, *Competitive win*. Copy a quote with attribution and link in one click |
 
 **Actions fit the feedback.** Problems get *Raise ticket*, *Resolve* and *Dismiss* (with a reason). Praise gets *Save to highlights* instead, because there's nothing to resolve. Anything can be *starred*, *marked reviewed* and given **team notes**.
 
@@ -105,13 +106,15 @@ Embeddings, D1 writes and Vectorize writes are batched. Each run uses roughly on
 | POST | `/sync/github?max=N&since_days=N` | `ADMIN_TOKEN` | Run the GitHub sync now. `max` overrides the per-repo cap; `since_days` re-scans further back once (nothing is duplicated or re-analyzed) |
 | POST | `/sync/hackernews?max=N` | `ADMIN_TOKEN` | Run the Hacker News sync now |
 | POST | `/sync/relevance?max=N` | `ADMIN_TOKEN` | Re-check up to N stored items for being about Cloudflare |
+| POST | `/sync/themes?max=N` | `ADMIN_TOKEN` | Group up to N not-yet-grouped items into themes |
 | POST | `/sync/summaries` | `ADMIN_TOKEN` | Refresh stale product summaries |
-| POST | `/sync/all?max=N` | `ADMIN_TOKEN` | GitHub, Hacker News, relevance clean-up, summaries (this is what the hourly cron does) |
+| POST | `/sync/all?max=N` | `ADMIN_TOKEN` | GitHub, Hacker News, relevance clean-up, themes, summaries (this is what the hourly cron does) |
 | POST | `/ingest` | `ADMIN_TOKEN` | Ingest one manual item (same body as the original project) |
 | PATCH | `/feedback/:id` | none | Any of `feedback_status` (`Open` \| `Ticket Raised` \| `Resolved` \| `Dismissed` + `dismissed_reason`), `starred`, `reviewed`, `highlight_tags` (string array), `responded` |
 | POST | `/feedback/bulk` | none | `{ids: [...≤200], changes: {...}}`, e.g. mark a backlog reviewed |
 | GET / POST | `/feedback/:id/notes` | none | List or add team notes (`{body, author?}`) |
 | DELETE | `/notes/:id` | none | Delete a note |
+| GET | `/themes` | none | Themes with at least two items |
 | GET | `/products/summaries` | none | Cached AI summary per product |
 | POST | `/products/summaries/refresh` | none | Write summaries that are missing or out of date (at most 6 per call, each at most every 15 minutes) |
 | GET | `/tickets` | none | All tickets, with source, link and product from the linked feedback |
@@ -164,6 +167,7 @@ To pull in more history after adding repos or raising the lookback:
 for i in 1 2 3 4 5; do curl -s -X POST "$APP_URL/sync/github?max=40" -H "Authorization: Bearer $ADMIN_TOKEN"; echo; done
 curl -s -X POST "$APP_URL/sync/github?since_days=60&max=40" -H "Authorization: Bearer $ADMIN_TOKEN"   # one-off deeper look for repos that were already syncing
 for i in 1 2 3 4; do curl -s -X POST "$APP_URL/sync/relevance?max=40" -H "Authorization: Bearer $ADMIN_TOKEN"; echo; done   # clean up existing items now instead of over the next hours
+for i in 1 2 3 4; do curl -s -X POST "$APP_URL/sync/themes?max=40" -H "Authorization: Bearer $ADMIN_TOKEN"; echo; done      # group existing items into themes now
 ```
 
 ### Local development
@@ -197,6 +201,7 @@ The tests run in Node against the real `schema.sql`. D1, Workers AI, Vectorize a
 - triage actions (star, reviewed, dismiss with reason, highlights, replied), bulk updates and notes
 - the Cloudflare-relevance rule: third-party praise is dropped on both sources, off-topic items are never re-fetched, and the clean-up job keeps anything someone acted on
 - product summaries: which are stale, which products qualify, caching and throttling
+- themes: grouping within a batch and through Vectorize, only within the same product, and titles
 - that HN thread titles and GitHub issue templates are never what gets embedded
 - per-repo GitHub budgets, docs-repo defaults and duplicate-free deeper backfills
 - that applying `migrations/` to the first deployed schema gives exactly `schema.sql`
@@ -213,6 +218,8 @@ The tests run in Node against the real `schema.sql`. D1, Workers AI, Vectorize a
 | `HN_BACKFILL_DAYS` | `7` | First run only |
 | `HN_MAX_NEW_PER_RUN` | `15` | Upper bound on AI calls per run, including items the AI rejects |
 | `RELEVANCE_BATCH` | `25` | Stored items re-checked per run for being about Cloudflare |
+| `THEME_SIMILARITY` | `0.82` | How alike two items about the same product must be (cosine) to share a theme. Lower it to group more; raise it if unrelated items get grouped |
+| `THEME_BATCH` | `40` | Items grouped per run (existing items are grouped in batches) |
 | `AI_MODEL` | `@cf/zai-org/glm-4.7-flash` | The original's `@cf/meta/llama-3-8b-instruct` was [deprecated on Workers AI on 2026-05-30](https://developers.cloudflare.com/changelog/post/2026-05-08-planned-model-deprecations/) |
 
 Changes from the original project:

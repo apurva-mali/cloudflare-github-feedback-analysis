@@ -8,6 +8,7 @@ import { useBreakpoint } from './lib/useBreakpoint.js';
 import Overview from './components/Overview.jsx';
 import FeedbackView from './components/FeedbackView.jsx';
 import HighlightsView from './components/HighlightsView.jsx';
+import ThemesView from './components/ThemesView.jsx';
 import ProductsView from './components/ProductsView.jsx';
 import TicketsView from './components/TicketsView.jsx';
 import DetailDrawer from './components/DetailDrawer.jsx';
@@ -17,11 +18,12 @@ import './App.css';
 const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'feedback', label: 'Feedback' },
-  { key: 'highlights', label: 'Highlights' },
+  { key: 'themes', label: 'Themes' },
   { key: 'products', label: 'Products' },
   { key: 'tickets', label: 'Tickets' },
+  { key: 'highlights', label: 'Highlights' },
 ];
-const FILTERED_TABS = new Set(['overview', 'feedback', 'highlights', 'products']);
+const FILTERED_TABS = new Set(['overview', 'feedback', 'themes', 'highlights', 'products']);
 const FILTER_KEYS = ['source', 'product', 'type', 'urgency', 'status', 'sentiment'];
 const EMPTY_FILTERS = Object.fromEntries(FILTER_KEYS.map((k) => [k, '']));
 const DEFAULT_RANGE = '30d';
@@ -37,16 +39,18 @@ function parseHash(hash = window.location.hash) {
     query: p.get('q') || '',
     view: VIEWS[p.get('view')] ? p.get('view') : 'all',
     item: p.get('item') || null,
+    theme: p.get('theme') ? Number(p.get('theme')) : null,
   };
 }
 
-function buildHash({ tab, range, filters, query, view, item }) {
+function buildHash({ tab, range, filters, query, view, item, theme }) {
   const p = new URLSearchParams();
   if (range !== DEFAULT_RANGE) p.set('range', range);
   for (const k of FILTER_KEYS) if (filters[k]) p.set(k, filters[k]);
   if (query) p.set('q', query);
   if (tab === 'feedback' && view && view !== 'all') p.set('view', view);
   if (item) p.set('item', item);
+  if (tab === 'themes' && theme) p.set('theme', String(theme));
   const qs = p.toString();
   return `#${tab}${qs ? `?${qs}` : ''}`;
 }
@@ -95,6 +99,9 @@ export default function App() {
   const [view, setView] = useState(initial.view);
   const [selectedId, setSelectedId] = useState(initial.item);
   const [navIds, setNavIds] = useState([]);
+  const [themeFocus, setThemeFocus] = useState(initial.theme);
+  const [themes, setThemes] = useState([]);
+  const [themesUnavailable, setThemesUnavailable] = useState(false);
 
   const [rows, setRows] = useState([]);
   const [tickets, setTickets] = useState([]);
@@ -111,10 +118,10 @@ export default function App() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const bp = useBreakpoint();
 
-  const notify = useCallback((message, tone = 'ok') => setToast({ message, tone, at: Date.now() }), []);
+  const notify = useCallback((message, tone = 'ok', action = null) => setToast({ message, tone, action, at: Date.now() }), []);
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 4000);
+    const t = setTimeout(() => setToast(null), toast.action ? 10000 : 4000);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -122,7 +129,14 @@ export default function App() {
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
     setLoadError(null);
-    const [fb, tk, st] = await Promise.allSettled([api.feedback(), api.tickets(), api.syncStatus()]);
+    const [fb, tk, st, th] = await Promise.allSettled([api.feedback(), api.tickets(), api.syncStatus(), api.themes()]);
+    if (th.status === 'fulfilled') {
+      setThemes(th.value.themes || []);
+      setThemesUnavailable(false);
+    } else {
+      setThemes([]);
+      setThemesUnavailable(/no such (table|column)/i.test(th.reason?.data?.details || ''));
+    }
     if (fb.status === 'fulfilled') {
       const raw = fb.value.results || [];
       setRows(raw.map(normalizeFeedback));
@@ -146,9 +160,9 @@ export default function App() {
 
   // ---- URL state -----------------------------------------------------------
   useEffect(() => {
-    const next = buildHash({ tab, range, filters, query, view, item: selectedId });
+    const next = buildHash({ tab, range, filters, query, view, item: selectedId, theme: themeFocus });
     if (window.location.hash !== next) window.history.replaceState(null, '', next);
-  }, [tab, range, filters, query, view, selectedId]);
+  }, [tab, range, filters, query, view, selectedId, themeFocus]);
 
   useEffect(() => {
     // Back/forward or a pasted link: adopt the whole view from the URL.
@@ -160,6 +174,7 @@ export default function App() {
       setQuery(s.query);
       setView(s.view);
       setSelectedId(s.item);
+      setThemeFocus(s.theme);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
@@ -173,7 +188,7 @@ export default function App() {
   };
 
   const copyLink = async (item) => {
-    const hash = buildHash({ tab, range, filters, query, view, item: item?.id || null });
+    const hash = buildHash({ tab, range, filters, query, view, item: item?.id || null, theme: themeFocus });
     const url = `${window.location.origin}${window.location.pathname}${hash}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -221,6 +236,16 @@ export default function App() {
   const activeFilters = FILTER_KEYS.filter((k) => filters[k]).length;
   const setFilter = (key) => (value) => setFilters((f) => ({ ...f, [key]: value }));
 
+  const themesById = useMemo(() => new Map(themes.map((t) => [t.id, t])), [themes]);
+  const openTheme = (id) => {
+    setSelectedId(null);
+    setThemeFocus(id);
+    if (tab !== 'themes') {
+      window.history.pushState(null, '', buildHash({ tab: 'themes', range, filters, query, view, item: null, theme: id }));
+      setTab('themes');
+    }
+  };
+
   const drill = ({ tab: target, view: nextView, ...next }) => {
     if (nextView) setView(nextView);
     if (Object.keys(next).length) {
@@ -250,13 +275,29 @@ export default function App() {
     }
   };
 
-  const bulkReview = async (ids) => {
+  const setReviewed = async (ids, reviewed) => {
     const now = new Date().toISOString();
     const set = new Set(ids);
-    setRows((rs) => rs.map((r) => (set.has(r.id) ? { ...r, reviewedAt: now } : r)));
+    setRows((rs) => rs.map((r) => (set.has(r.id) ? { ...r, reviewedAt: reviewed ? now : null } : r)));
+    for (let i = 0; i < ids.length; i += 200) await api.bulkUpdate(ids.slice(i, i + 200), { reviewed });
+  };
+
+  const bulkReview = async (ids) => {
     try {
-      for (let i = 0; i < ids.length; i += 200) await api.bulkUpdate(ids.slice(i, i + 200), { reviewed: true });
-      notify(`Marked ${ids.length} items as reviewed`);
+      await setReviewed(ids, true);
+      // Easy to click by accident, so offer an undo right away.
+      notify(`Marked ${ids.length} items as reviewed`, 'ok', {
+        label: 'Undo',
+        onClick: async () => {
+          try {
+            await setReviewed(ids, false);
+            notify(`Put ${ids.length} items back to review`);
+          } catch (err) {
+            notify(`Couldn't undo: ${err.message}`, 'error');
+            load({ quiet: true });
+          }
+        },
+      });
     } catch (err) {
       notify(`Couldn't mark all as reviewed: ${err.message}`, 'error');
       load({ quiet: true });
@@ -462,6 +503,9 @@ export default function App() {
                 onToggleStar={(item) => updateItem(item, { starred: !item.starred }, item.starred ? 'Star removed' : 'Starred')}
               />
             )}
+            {tab === 'themes' && (
+              <ThemesView key={themeFocus || 'themes'} themes={themes} items={filtered} unavailable={themesUnavailable} focusId={themeFocus} onOpen={setSelectedId} />
+            )}
             {tab === 'highlights' && <HighlightsView items={filtered} unavailable={needsMigration} onUpdate={updateItem} onOpen={setSelectedId} notify={notify} />}
             {tab === 'products' && <ProductsView items={filtered} onDrill={drill} />}
             {tab === 'tickets' && (
@@ -481,6 +525,8 @@ export default function App() {
       <DetailDrawer
         item={drawerOpen ? selected : null}
         nav={nav}
+        theme={selected?.themeId ? themesById.get(selected.themeId) : null}
+        onOpenTheme={openTheme}
         onClose={() => setSelectedId(null)}
         {...panelProps}
       />
@@ -498,6 +544,19 @@ export default function App() {
         {toast && (
           <div key={toast.at} className={`toast ${toast.tone}`}>
             {toast.message}
+            {toast.action && (
+              <button
+                type="button"
+                className="toast-action"
+                onClick={() => {
+                  const run = toast.action.onClick;
+                  setToast(null);
+                  run();
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -22,6 +22,7 @@ export const api = {
   feedback: () => request('/all'),
   tickets: () => request('/tickets'),
   syncStatus: () => request('/sync/status'),
+  themes: () => request('/themes'),
   search: (q) => request(`/search?q=${encodeURIComponent(q)}&limit=25`),
   updateFeedback: (id, changes) => request(`/feedback/${id}`, { method: 'PATCH', body: changes }),
   bulkUpdate: (ids, changes) => request('/feedback/bulk', { method: 'POST', body: { ids, changes } }),

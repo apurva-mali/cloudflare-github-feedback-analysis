@@ -90,6 +90,6 @@ describe('is it about Cloudflare?', () => {
 	it('runs in /sync/all after the sources', async () => {
 		globalThis.fetch = async () => new Response('[]');
 		const res = await worker.fetch(new Request('http://x/sync/all', { method: 'POST' }), env);
-		expect(Object.keys(await res.json())).toEqual(['github', 'hackernews', 'relevance', 'summaries']);
+		expect(Object.keys(await res.json())).toEqual(['github', 'hackernews', 'relevance', 'themes', 'summaries']);
 	});
 });

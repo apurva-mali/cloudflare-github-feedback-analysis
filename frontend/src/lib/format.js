@@ -153,6 +153,7 @@ export function normalizeFeedback(row) {
     highlightTags: parseLabels(row.highlight_tags),
     respondedAt: str(row.responded_at) || null,
     subject: str(row.subject) || null,
+    themeId: row.theme_id ?? null,
     notesCount: Number(row.notes_count) || 0,
   };
 }

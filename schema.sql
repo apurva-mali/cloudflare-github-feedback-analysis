@@ -43,12 +43,17 @@ CREATE TABLE feedback (
 
   -- Relevance
   subject TEXT,                  -- what the opinion is about, e.g. "Cloudflare R2" or "Hono"
-  relevance_checked INTEGER NOT NULL DEFAULT 0
+  relevance_checked INTEGER NOT NULL DEFAULT 0,
+
+  -- Themes
+  theme_id INTEGER,
+  theme_checked INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_feedback_timestamp ON feedback (feedback_timestamp);
 CREATE INDEX idx_feedback_source ON feedback (source);
 CREATE INDEX idx_feedback_inbox ON feedback (reviewed_at, feedback_status);
+CREATE INDEX idx_feedback_theme ON feedback (theme_id);
 
 -- Fetched items judged not to be product feedback, so they are never re-analyzed.
 DROP TABLE IF EXISTS skipped_items;
@@ -73,6 +78,17 @@ CREATE TABLE tickets (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX idx_tickets_status ON tickets (status);
+
+-- Groups of similar feedback
+DROP TABLE IF EXISTS themes;
+CREATE TABLE themes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT,
+  product TEXT,
+  titled_at_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 
 -- Internal notes on feedback
 DROP TABLE IF EXISTS feedback_notes;

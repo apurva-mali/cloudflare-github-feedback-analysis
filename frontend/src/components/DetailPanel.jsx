@@ -5,6 +5,7 @@ import {
   CircleCheck,
   ExternalLink,
   Inbox,
+  Layers,
   Link2,
   MessageSquare,
   MessageSquareReply,
@@ -68,6 +69,8 @@ export function DismissMenu({ item, onUpdate, open, onOpenChange }) {
 export default function DetailPanel({
   item,
   nav,
+  theme,
+  onOpenTheme,
   busy,
   onUpdate,
   onRaiseTicket,
@@ -129,6 +132,11 @@ export default function DetailPanel({
             <a className="source-link" href={item.url} target="_blank" rel="noopener noreferrer">
               {linkLabel(item)} <ExternalLink size={14} aria-hidden="true" />
             </a>
+          )}
+          {theme && (
+            <button type="button" className="theme-link" onClick={() => onOpenTheme(theme.id)}>
+              <Layers size={14} aria-hidden="true" /> {theme.title || 'Related feedback'} <span className="muted">({theme.item_count})</span>
+            </button>
           )}
         </div>
 
