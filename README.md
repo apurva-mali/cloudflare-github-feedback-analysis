@@ -5,11 +5,16 @@ A copy of the [Cloudflare Voice feedback dashboard](https://github.com/apurva-ma
 - **GitHub Issues** from Cloudflare's open-source repos (by default [`cloudflare/workers-sdk`](https://github.com/cloudflare/workers-sdk)). This brings structured bug reports and feature requests.
 - **Hacker News** stories and comments that discuss Cloudflare products. This brings opinions, including praise, which GitHub issues almost never contain.
 
-The dashboard itself (Feedback Log, KPI Dashboard, Clustered Issues, semantic search) is unchanged. What's new is a scheduled ingestion layer in front of it, plus a few dashboard additions:
+## The dashboard
 
-- links back to each GitHub issue
-- the issue's labels, reactions, comments and open/closed state
-- "Raise Ticket" and "Resolve" now save to D1 instead of resetting on reload
+| Tab | What it's for |
+|---|---|
+| **Overview** | Sentiment index and balance bar (click a segment to read those items), key numbers, "Needs attention" and "What people like" lists, feedback over time, sentiment by product |
+| **Feedback** | The full log. Sort it, page through it, filter it, search by exact words or by *similar meaning* (Vectorize). Click a row to open the detail panel with the AI analysis, the original text, a link to the source, and actions |
+| **Products** | Each product's volume, sentiment balance, index, urgent count, open tickets, and its top concern and top praise |
+| **Tickets** | Support tickets raised from feedback (CV-1, CV-2, …). Change priority, assignee and status inline. Resolving a ticket resolves its feedback |
+
+The time range and filters at the top apply to Overview, Feedback and Products. Tables choose their columns by screen width, so nothing scrolls sideways, down to phone size.
 
 ## Why GitHub Issues first
 
@@ -85,6 +90,9 @@ Embeddings, D1 writes and Vectorize writes are batched. Each run uses roughly on
 | POST | `/sync/all?max=N` | `ADMIN_TOKEN` | Run every source (this is what the hourly cron does) |
 | POST | `/ingest` | `ADMIN_TOKEN` | Ingest one manual item (same body as the original project) |
 | PATCH | `/feedback/:id` | none | `{"feedback_status": "Open" \| "Ticket Raised" \| "Resolved"}` |
+| GET | `/tickets` | none | All tickets, with source, link and product from the linked feedback |
+| POST | `/tickets` | none | `{feedback_id, title, priority: "P0"–"P3", team?, assignee?, description?}`. One ticket per feedback item (409 if one exists) |
+| PATCH | `/tickets/:id` | none | Any of `status` (`Open` \| `In Progress` \| `Resolved`), `priority`, `assignee`, `team`, `title`, `description` |
 
 `ADMIN_TOKEN` is sent as `Authorization: Bearer <token>`. If the secret isn't set (typical for local dev), these routes are open.
 
@@ -122,9 +130,12 @@ If you deployed before Hacker News was added:
 
 ```bash
 git pull
-npm run db:migrate:remote   # adds skipped_items, re-buckets sentiment on existing rows
+npm run db:migrate:remote           # adds skipped_items, re-buckets sentiment on existing rows
+npm run db:migrate:tickets:remote   # adds the tickets table
 npm run build && npm run deploy
 ```
+
+Both migrations are safe to run more than once.
 
 ### Local development
 
@@ -181,5 +192,5 @@ Changes from the original project:
 - **GitHub feedback still skews negative**, since issue trackers are mostly bug reports. Filter by source to compare like with like.
 - **HN pagination is capped** at 600 results per query per run. That's plenty for these queries, but a very broad query (for example just `cloudflare`) could miss items in a busy week.
 - **No dashboard auth.** Anyone with the URL can view the dashboard and change statuses. Put it behind Cloudflare Access before sharing it.
-- **"Raise Ticket" only saves a status.** A natural next step is creating a real issue or Jira ticket and storing its link.
+- **Tickets live in D1 only.** A natural next step is also pushing them to GitHub Issues or Jira and storing the external link on the ticket.
 - **More sources.** `src/pipeline.js` doesn't depend on the source, so Stack Overflow or the Cloudflare Community forum would each be another fetcher module like `src/hackernews.js`, registered in `SYNCS` in `src/index.js`.

@@ -10,6 +10,9 @@
  *   POST  /sync/all            run every source now            (admin)
  *   POST  /ingest              ingest one manual feedback item (admin)
  *   PATCH /feedback/:id        set PM status: Open | Ticket Raised | Resolved
+ *   GET   /tickets             all support tickets
+ *   POST  /tickets             raise a ticket from a feedback item
+ *   PATCH /tickets/:id         update status / priority / assignee / team
  *
  * Cron: the `scheduled` handler runs every source (see triggers in wrangler.jsonc).
  */
@@ -18,6 +21,7 @@ import { CORS_HEADERS, json, isAuthorized } from './http.js';
 import { analyzeFeedback, buildRecord, storeRecords, EMBEDDING_MODEL } from './pipeline.js';
 import { syncGitHub } from './github.js';
 import { syncHackerNews } from './hackernews.js';
+import { listTickets, createTicket, updateTicket } from './tickets.js';
 
 const PM_STATUSES = new Set(['Open', 'Ticket Raised', 'Resolved']);
 
@@ -78,7 +82,18 @@ async function handleIngest(request, env) {
 }
 
 async function handleAll(env) {
-	const { results } = await env.DB.prepare('SELECT * FROM feedback ORDER BY feedback_timestamp DESC').all();
+	let results;
+	try {
+		({ results } = await env.DB.prepare(
+			`SELECT f.*, t.id AS ticket_id, t.status AS ticket_status, t.priority AS ticket_priority
+			 FROM feedback f LEFT JOIN tickets t ON t.feedback_id = f.id
+			 ORDER BY f.feedback_timestamp DESC`
+		).all());
+	} catch (err) {
+		// Database not migrated for tickets yet: still serve the feedback.
+		if (!/no such table: tickets/.test(String(err?.message))) throw err;
+		({ results } = await env.DB.prepare('SELECT * FROM feedback ORDER BY feedback_timestamp DESC').all());
+	}
 	return json({ results: results.map(serializeRow), total: results.length });
 }
 
@@ -86,8 +101,9 @@ async function handleSearch(url, env) {
 	const query = url.searchParams.get('q');
 	if (!query) return json({ error: 'Missing or invalid "q" query parameter' }, 400);
 
+	const topK = Math.min(Math.max(Number(url.searchParams.get('limit')) || 20, 1), 50);
 	const emb = await env.AI.run(EMBEDDING_MODEL, { text: [query] });
-	const vectorResults = await env.VECTOR_INDEX.query(emb.data[0], { topK: 5, returnMetadata: true });
+	const vectorResults = await env.VECTOR_INDEX.query(emb.data[0], { topK, returnMetadata: true });
 	const ids = vectorResults.matches.map((m) => m.id);
 	if (!ids.length) return json({ query, results: [] });
 
@@ -137,6 +153,11 @@ export default {
 
 			const statusMatch = path.match(/^\/feedback\/([\w-]+)$/);
 			if (method === 'PATCH' && statusMatch) return await handleStatusUpdate(statusMatch[1], request, env);
+
+			if (path === '/tickets' && method === 'GET') return await listTickets(env);
+			if (path === '/tickets' && method === 'POST') return await createTicket(request, env);
+			const ticketMatch = path.match(/^\/tickets\/(\d+)$/);
+			if (method === 'PATCH' && ticketMatch) return await updateTicket(Number(ticketMatch[1]), request, env);
 
 			const syncMatch = path.match(/^\/sync\/(\w+)$/);
 			if (method === 'POST' && (path === '/ingest' || syncMatch)) {

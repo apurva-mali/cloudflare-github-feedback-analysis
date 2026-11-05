@@ -27,7 +27,7 @@ export function createFakeD1() {
 		},
 		async run() {
 			const info = db.prepare(sql).run(...params);
-			return { meta: { changes: Number(info.changes) } };
+			return { meta: { changes: Number(info.changes), last_row_id: Number(info.lastInsertRowid) } };
 		},
 	});
 

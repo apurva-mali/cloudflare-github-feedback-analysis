@@ -44,6 +44,22 @@ CREATE TABLE skipped_items (
   skipped_at TEXT
 );
 
+-- Support tickets raised from feedback (shown as CV-<id>).
+DROP TABLE IF EXISTS tickets;
+CREATE TABLE tickets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  feedback_id TEXT NOT NULL UNIQUE,       -- one ticket per piece of feedback
+  title TEXT NOT NULL,
+  description TEXT,
+  priority TEXT NOT NULL DEFAULT 'P2',    -- P0 | P1 | P2 | P3
+  team TEXT,
+  assignee TEXT,
+  status TEXT NOT NULL DEFAULT 'Open',    -- Open | In Progress | Resolved
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_tickets_status ON tickets (status);
+
 -- One row per ingestion stream, remembering how far we have read.
 DROP TABLE IF EXISTS sync_state;
 CREATE TABLE sync_state (
