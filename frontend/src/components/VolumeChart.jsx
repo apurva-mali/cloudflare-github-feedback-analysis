@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SENTIMENTS } from '../lib/format.js';
+import { bucketize } from '../lib/buckets.js';
 
-const DAY = 86400000;
 const HEIGHT = 220;
 const PAD = { top: 12, right: 8, bottom: 26, left: 32 };
 const GAP = 2; // surface gap between stacked segments
@@ -15,32 +15,6 @@ function useWidth(ref) {
     return () => ro.disconnect();
   }, [ref]);
   return width;
-}
-
-function startOfDay(t) {
-  const d = new Date(t);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-/** Bucket items per day (or per week when the span is long). */
-function bucketize(items, rangeDays) {
-  const times = items.map((i) => new Date(i.timestamp).getTime()).filter(Number.isFinite);
-  if (!times.length) return { buckets: [], unit: 'day' };
-  const end = startOfDay(Date.now());
-  const start = rangeDays ? end - (rangeDays - 1) * DAY : startOfDay(Math.min(...times));
-  const spanDays = Math.round((end - start) / DAY) + 1;
-  const step = spanDays > 60 ? 7 * DAY : DAY;
-  const buckets = [];
-  for (let t = start; t <= end; t += step) buckets.push({ t, negative: 0, neutral: 0, positive: 0, total: 0 });
-  for (const item of items) {
-    const ts = new Date(item.timestamp).getTime();
-    if (!Number.isFinite(ts) || ts < start) continue;
-    const idx = Math.min(buckets.length - 1, Math.floor((startOfDay(ts) - start) / step));
-    buckets[idx][item.sentiment]++;
-    buckets[idx].total++;
-  }
-  return { buckets, unit: step === DAY ? 'day' : 'week' };
 }
 
 function niceMax(n) {
