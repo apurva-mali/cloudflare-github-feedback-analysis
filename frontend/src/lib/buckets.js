@@ -39,3 +39,19 @@ export function bucketize(items, rangeDays, now = Date.now()) {
   }
   return { buckets, unit: stepDays === 1 ? 'day' : 'week' };
 }
+
+/** Rolling sentiment index per day: (positive − negative) / total over the last `window` days. */
+export function rollingIndex(items, rangeDays, window = 7) {
+  const { buckets } = bucketize(items, rangeDays);
+  return buckets.map((b, i) => {
+    let pos = 0;
+    let neg = 0;
+    let total = 0;
+    for (let j = Math.max(0, i - window + 1); j <= i; j++) {
+      pos += buckets[j].positive;
+      neg += buckets[j].negative;
+      total += buckets[j].total;
+    }
+    return { t: b.t, value: total ? Math.round(((pos - neg) / total) * 100) : null, total };
+  });
+}

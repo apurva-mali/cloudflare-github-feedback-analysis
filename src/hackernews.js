@@ -179,6 +179,7 @@ export async function syncHackerNews(env, { maxNew } = {}) {
 	const state = await env.DB.prepare('SELECT cursor FROM sync_state WHERE stream = ?').bind(STREAM).first();
 	const since = state?.cursor ? Number(state.cursor) : Math.floor(Date.now() / 1000) - backfillDays * 86400;
 
+	// filtered_ai = the AI judged it not about Cloudflare (e.g. praise for a third-party tool used on Cloudflare)
 	const result = { source: 'hackernews', fetched: 0, already_known: 0, filtered_keyword: 0, filtered_ai: 0, created: 0, ai_failures: 0, errors: [], done: false };
 
 	// 1. Gather + dedupe across queries
@@ -226,7 +227,7 @@ export async function syncHackerNews(env, { maxNew } = {}) {
 			if (!ai._ai_ok) result.ai_failures++;
 			if (!ai.relevant) {
 				result.filtered_ai++;
-				skipped.push([item.external_id, 'not_feedback']);
+				skipped.push([item.external_id, `not_about_cloudflare:${ai.subject || 'other'}`.slice(0, 120)]);
 			} else {
 				const product =
 					ai.product_category && ai.product_category !== 'Unknown' ? ai.product_category : productFromText(item.text) || 'Unknown';

@@ -111,6 +111,9 @@ export function createFakeVectorize() {
 		async insert(items) {
 			for (const v of items) vectors.set(v.id, v);
 		},
+		async deleteByIds(ids) {
+			for (const id of ids) vectors.delete(id);
+		},
 		async query(values, { topK = 5 } = {}) {
 			const matches = [...vectors.values()]
 				.map((v) => ({ id: v.id, score: v.values.length === values.length ? cos(values, v.values) : 0 }))
@@ -196,9 +199,9 @@ export function mockHnFetch(hitsByQuery) {
 	return requests;
 }
 
-/** Fake AI whose analysis depends on the text: `rules` is [[regex, analysisOverrides], ...]. */
+/** Fake AI whose answers depend on the text: `rules` is [[regex, overrides], ...]. */
 export function createScriptedAI(rules) {
-	const calls = { text: 0, embed: 0 };
+	const calls = { text: 0, embed: 0, checks: 0, summaries: 0 };
 	return {
 		calls,
 		async run(model, input) {
@@ -207,10 +210,21 @@ export function createScriptedAI(rules) {
 				return { data: input.text.map(() => new Array(768).fill(0.01)) };
 			}
 			calls.text++;
+			const system = input.messages[0].content;
 			const text = input.messages.at(-1).content;
+			if (system.includes('{"summary"')) {
+				calls.summaries++;
+				return { choices: [{ message: { content: JSON.stringify({ summary: `Summary for ${text.match(/Product: (.*)/)[1]}` }) } }] };
+			}
 			const match = rules.find(([re]) => re.test(text));
+			if (match && match[1].fail) return { choices: [{ message: { content: 'sorry' } }] };
+			if (system.startsWith('Decide whether')) {
+				calls.checks++;
+				return { choices: [{ message: { content: JSON.stringify({ subject: 'Cloudflare', about_cloudflare: true, ...(match ? match[1] : {}) }) } }] };
+			}
 			const body = {
-				relevant: true,
+				subject: 'Cloudflare',
+				about_cloudflare: true,
 				sentiment_score: 5,
 				urgency_level: 'Neutral',
 				user_type: 'Individual',

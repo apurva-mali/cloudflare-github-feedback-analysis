@@ -21,7 +21,6 @@ async function request(path, options = {}) {
 export const api = {
   feedback: () => request('/all'),
   tickets: () => request('/tickets'),
-  themes: () => request('/themes'),
   syncStatus: () => request('/sync/status'),
   search: (q) => request(`/search?q=${encodeURIComponent(q)}&limit=25`),
   updateFeedback: (id, changes) => request(`/feedback/${id}`, { method: 'PATCH', body: changes }),
@@ -31,6 +30,6 @@ export const api = {
   deleteNote: (noteId) => request(`/notes/${noteId}`, { method: 'DELETE' }),
   createTicket: (ticket) => request('/tickets', { method: 'POST', body: ticket }),
   updateTicket: (id, changes) => request(`/tickets/${id}`, { method: 'PATCH', body: changes }),
-  digests: (week) => request(`/digests${week ? `?week=${week}` : ''}`),
-  generateDigest: (week) => request('/digests/generate', { method: 'POST', body: week ? { week } : {} }),
+  productSummaries: () => request('/products/summaries'),
+  refreshProductSummaries: () => request('/products/summaries/refresh', { method: 'POST' }),
 };

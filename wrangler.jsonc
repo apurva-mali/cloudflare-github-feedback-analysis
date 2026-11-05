@@ -13,10 +13,10 @@
 		"enabled": true
 	},
 
-	// Hourly at :17: pull GitHub + Hacker News, then group new items into themes.
-	// Mondays 13:07 UTC (8:07 New York in winter): write last week's digest.
+	// Hourly at :17: pull GitHub + Hacker News, re-check older items for being
+	// about Cloudflare, then refresh product summaries that have new feedback.
 	"triggers": {
-		"crons": ["17 * * * *", "7 13 * * 1"]
+		"crons": ["17 * * * *"]
 	},
 
 	/**
@@ -39,10 +39,9 @@
 		"HN_BACKFILL_DAYS": "7",
 		// Cap on AI calls for HN per run (includes items the AI rejects as not-feedback).
 		"HN_MAX_NEW_PER_RUN": "15",
-		// Themes: how similar two items must be (cosine, 0-1) to share a theme.
-		// Raise if unrelated items get grouped; lower if obvious duplicates stay apart.
-		"THEME_SIMILARITY": "0.85",
-		"THEME_BATCH": "40",
+		// How many stored items to re-check per run for being about Cloudflare
+		// (only items saved before the check existed, or whose analysis failed).
+		"RELEVANCE_BATCH": "25",
 		// Text model for analysis (llama-3-8b-instruct was deprecated 2026-05-30).
 		"AI_MODEL": "@cf/zai-org/glm-4.7-flash"
 	},

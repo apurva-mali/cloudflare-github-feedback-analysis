@@ -1,9 +1,10 @@
 import {
   Bookmark,
+  ChevronDown,
+  ChevronUp,
   CircleCheck,
   ExternalLink,
   Inbox,
-  Layers,
   Link2,
   MessageSquare,
   MessageSquareReply,
@@ -66,12 +67,11 @@ export function DismissMenu({ item, onUpdate, open, onOpenChange }) {
  */
 export default function DetailPanel({
   item,
-  theme,
+  nav,
   busy,
   onUpdate,
   onRaiseTicket,
   onViewTicket,
-  onOpenTheme,
   onCopyLink,
   onClose,
   notify,
@@ -94,6 +94,19 @@ export default function DetailPanel({
           </span>
         </div>
         <div className="drawer-head-actions">
+          {nav && (
+            <span className="nav-group" aria-label="Move between feedback">
+              <span className="muted small nav-pos">
+                {nav.index + 1} of {nav.total}
+              </span>
+              <button type="button" className="icon-btn" onClick={nav.onPrev} disabled={nav.index <= 0} aria-label="Previous feedback (k)" title="Previous (k)">
+                <ChevronUp size={18} />
+              </button>
+              <button type="button" className="icon-btn" onClick={nav.onNext} disabled={nav.index >= nav.total - 1} aria-label="Next feedback (j)" title="Next (j)">
+                <ChevronDown size={18} />
+              </button>
+            </span>
+          )}
           <StarButton starred={item.starred} onToggle={() => onUpdate(item, { starred: !item.starred }, item.starred ? 'Star removed' : 'Starred')} />
           <button type="button" className="icon-btn" onClick={() => onCopyLink(item)} aria-label="Copy link to this feedback" title="Copy link">
             <Link2 size={17} />
@@ -116,11 +129,6 @@ export default function DetailPanel({
             <a className="source-link" href={item.url} target="_blank" rel="noopener noreferrer">
               {linkLabel(item)} <ExternalLink size={14} aria-hidden="true" />
             </a>
-          )}
-          {theme && (
-            <button type="button" className="theme-link" onClick={() => onOpenTheme(theme.id)}>
-              <Layers size={14} aria-hidden="true" /> {theme.title || 'Related feedback'} <span className="muted">({theme.item_count})</span>
-            </button>
           )}
         </div>
 
@@ -206,6 +214,12 @@ export default function DetailPanel({
             <dt>Product</dt>
             <dd>{item.product}</dd>
           </div>
+          {item.subject && (
+            <div title="What the AI found this feedback is about. Feedback about other tools is filtered out.">
+              <dt>About</dt>
+              <dd>{item.subject}</dd>
+            </div>
+          )}
           <div>
             <dt>Type</dt>
             <dd>{item.type}</dd>
@@ -263,7 +277,6 @@ export default function DetailPanel({
               <strong>{ticketKey(item.ticketId)}</strong> {item.ticketPriority && <PriorityTag priority={item.ticketPriority} />}{' '}
               <span className="muted">
                 {item.ticketStatus}
-                {item.ticketViaTheme ? ', via its theme' : ''}
               </span>
             </span>
             <button type="button" className="btn" onClick={() => onViewTicket(item.ticketId)}>

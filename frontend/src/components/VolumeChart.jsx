@@ -1,21 +1,11 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { useWidth } from '../lib/useWidth.js';
 import { SENTIMENTS } from '../lib/format.js';
 import { bucketize } from '../lib/buckets.js';
 
 const HEIGHT = 220;
 const PAD = { top: 12, right: 8, bottom: 26, left: 32 };
 const GAP = 2; // surface gap between stacked segments
-
-function useWidth(ref) {
-  const [width, setWidth] = useState(640);
-  useLayoutEffect(() => {
-    if (!ref.current) return;
-    const ro = new ResizeObserver(([entry]) => setWidth(Math.max(280, entry.contentRect.width)));
-    ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, [ref]);
-  return width;
-}
 
 function niceMax(n) {
   if (n <= 4) return 4;

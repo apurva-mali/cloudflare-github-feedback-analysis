@@ -237,7 +237,7 @@ async function syncRepo(env, repo, budget, opts) {
 		: (await getCursor(env, stream)) || new Date(Date.now() - backfillDays * 86400000).toISOString();
 	let cursor = since;
 
-	const result = { repo, seen: 0, skipped: 0, updated: 0, created: 0, ai_failures: 0, done: false };
+	const result = { repo, seen: 0, skipped: 0, updated: 0, created: 0, not_about_cloudflare: 0, ai_failures: 0, analyzed: 0, done: false };
 
 	for (let page = 1; page <= MAX_PAGES_PER_REPO; page++) {
 		const issues = await fetchIssuesPage(env, repo, since, page);
@@ -255,6 +255,13 @@ async function syncRepo(env, repo, budget, opts) {
 			.bind(...ids)
 			.all();
 		const known = new Set(existing.results.map((r) => r.external_id));
+		// Issues the AI already judged not to be about Cloudflare never come back.
+		const { results: skippedRows } = await env.DB.prepare(
+			`SELECT external_id FROM skipped_items WHERE external_id IN (${ids.map(() => '?').join(',')})`
+		)
+			.bind(...ids)
+			.all();
+		const rejected = new Set(skippedRows.map((r) => r.external_id));
 
 		const refreshStmts = [];
 		const toAnalyze = [];
@@ -271,9 +278,9 @@ async function syncRepo(env, repo, budget, opts) {
 					).bind(item.source_state, item.reactions, item.comments_count, JSON.stringify(item.labels), item.title, item.source_updated_at, item.external_id)
 				);
 				result.updated++;
-			} else if (!isCommunityIssue(issue, opts)) {
+			} else if (rejected.has(item.external_id) || !isCommunityIssue(issue, opts)) {
 				result.skipped++;
-			} else if (toAnalyze.length < budget - result.created) {
+			} else if (toAnalyze.length < budget - result.analyzed) {
 				toAnalyze.push(item);
 			} else {
 				stoppedEarly = true;
@@ -286,17 +293,29 @@ async function syncRepo(env, repo, budget, opts) {
 
 		// AI calls run one at a time to stay gentle on Workers AI rate limits.
 		const records = [];
+		const offTopic = [];
 		for (const item of toAnalyze) {
 			const context = `Source: GitHub issue in ${item.repo}. Labels: ${item.labels.join(', ') || 'none'}. Reactions: ${item.reactions}. State: ${item.source_state}.`;
 			const ai = await analyzeFeedback(env, item.text, context);
 			if (!ai._ai_ok) result.ai_failures++;
+			if (!ai.about_cloudflare) {
+				offTopic.push([item.external_id, ai.subject]);
+				continue;
+			}
 			records.push(buildRecord(item, ai, deterministicFields(item, ai)));
 		}
 		await storeRecords(env, records);
+		if (offTopic.length) {
+			const now = new Date().toISOString();
+			const stmt = env.DB.prepare('INSERT OR IGNORE INTO skipped_items (external_id, reason, skipped_at) VALUES (?, ?, ?)');
+			await env.DB.batch(offTopic.map(([id, subject]) => stmt.bind(id, `not_about_cloudflare:${subject || 'other'}`.slice(0, 120), now)));
+		}
+		result.analyzed += toAnalyze.length;
 		result.created += records.length;
+		result.not_about_cloudflare += offTopic.length;
 
 		cursor = newCursor;
-		if (stoppedEarly || result.created >= budget) break;
+		if (stoppedEarly || result.analyzed >= budget) break;
 		if (issues.length < PER_PAGE) {
 			result.done = true;
 			break;

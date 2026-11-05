@@ -16,23 +16,13 @@ function defaultDescription(item) {
   return lines.filter((l) => l !== false && l != null).join('\n');
 }
 
-function themeDescription(theme) {
-  const lines = [`${theme.members.length} pieces of feedback grouped as "${theme.title}".`, ''];
-  for (const m of theme.members.slice(0, 25)) lines.push(`- ${m.headline}${m.url ? ` (${m.url})` : ''}`);
-  if (theme.members.length > 25) lines.push(`- …and ${theme.members.length - 25} more`);
-  return lines.join('\n');
-}
-
-/** Pass `item` for one piece of feedback, or `theme` (with members) for a whole theme. */
-export default function TicketForm({ item: single, theme, products, onCancel, onSubmit }) {
-  // A theme ticket is anchored on its most-engaged member that isn't praise.
-  const item = single || [...theme.members].sort((a, b) => (a.sentiment === 'positive') - (b.sentiment === 'positive') || b.reactions - a.reactions)[0];
+export default function TicketForm({ item, products, onCancel, onSubmit }) {
   const [form, setForm] = useState(() => ({
-    title: (theme ? theme.title || item.headline : item.headline).slice(0, 200),
+    title: item.headline.slice(0, 200),
     priority: priorityFromUrgency(item.urgency),
     team: item.product !== 'Unknown' ? item.product : '',
     assignee: '',
-    description: theme ? themeDescription(theme) : defaultDescription(item),
+    description: defaultDescription(item),
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -54,7 +44,7 @@ export default function TicketForm({ item: single, theme, products, onCancel, on
     setSaving(true);
     setError(null);
     try {
-      await onSubmit({ feedback_id: item.id, ...(theme ? { theme_id: theme.id } : {}), ...form });
+      await onSubmit({ feedback_id: item.id, ...form });
     } catch (err) {
       setError(err.message);
       setSaving(false);
@@ -69,13 +59,7 @@ export default function TicketForm({ item: single, theme, products, onCancel, on
           <div>
             <h2 id="ticket-heading">Raise a ticket</h2>
             <p className="muted modal-from">
-              {theme ? (
-                <>Covers all {theme.members.length} items in this theme. Resolving it resolves them all.</>
-              ) : (
-                <>
-                  From <SourceTag source={item.source} /> feedback about {item.product}
-                </>
-              )}
+              From <SourceTag source={item.source} /> feedback about {item.product}
             </p>
           </div>
           <button type="button" className="icon-btn" onClick={onCancel} aria-label="Cancel">

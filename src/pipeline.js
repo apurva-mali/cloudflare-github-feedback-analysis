@@ -14,7 +14,7 @@ export const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
 const MAX_LLM_INPUT_CHARS = 2500;
 
 /**
- * The text we embed for search and themes. It must describe *what the feedback
+ * The text we embed for search. It must describe *what the feedback
  * is about*, so it leaves out what all items share:
  *   - GitHub: title + AI summary (bodies are mostly the same issue template)
  *   - Hacker News replies: summary + the comment (the title is just the thread)
@@ -26,24 +26,38 @@ export function embeddingTextFor(r) {
 	return parts.filter(Boolean).join('\n').slice(0, 1200) || (r.original_text || '').slice(0, 600) || '(empty)';
 }
 
+/**
+ * Shared rule for deciding whether feedback is about Cloudflare.
+ * The model must first name what the opinion is about (the subject), which
+ * stops "I used <tool> on my Cloudflare project and <tool> is great" from
+ * being counted as praise for Cloudflare.
+ */
+export const ABOUT_CLOUDFLARE_RULES = `"subject": the specific product, tool, library, service or company the author's opinion, problem or request is aimed at (e.g. "Cloudflare R2", "Vercel", "Prisma", "Hono"),
+  "about_cloudflare": true ONLY if that subject is a Cloudflare product, service, API, CLI, SDK, docs, pricing, support or Cloudflare itself.
+     - A problem integrating a third-party tool WITH a Cloudflare product counts (e.g. "Prisma fails on D1" is about D1).
+     - Praise or criticism of a third-party tool, library, framework, host or company does NOT count, even if it was used on or with Cloudflare
+       (e.g. "I built my Cloudflare app with Hono and Hono is fantastic" is about Hono → false).
+     - Comparisons count only for what is said about Cloudflare's side.
+     - Cloudflare mentioned only in passing, as news, or as an outage report with no opinion → false.`;
+
 const SYSTEM_PROMPT = `You are a Product Feedback AI for Cloudflare's developer platform.
-Analyze the feedback and return ONLY a JSON object with these keys:
+Analyze the feedback and return ONLY a JSON object with these keys, in this order:
 
 {
-  "relevant": true if the text expresses an experience, opinion, complaint, praise or request about a Cloudflare product; false if Cloudflare is only mentioned in passing, as news, or the text is about something else,
-  "sentiment_score": integer 1-10 (1 = angry or blocked, 5 = neutral or matter-of-fact, 10 = delighted),
+  ${ABOUT_CLOUDFLARE_RULES}
+  "sentiment_score": integer 1-10 for the author's feeling TOWARD CLOUDFLARE ONLY (1 = angry or blocked, 5 = neutral or matter-of-fact, 10 = delighted). Ignore how they feel about other tools,
   "urgency_level": "High" | "Neutral" | "Low",
   "user_type": "Enterprise" | "SMB" | "Individual" | "Unknown",
   "product_category": the Cloudflare product it is about, e.g. "Workers", "Wrangler", "Pages", "R2", "D1", "KV", "Durable Objects", "Queues", "Workers AI", "Vectorize", "Zero Trust", or "Unknown",
-  "feedback_type": "Bug" | "Feature Request" | "UX" | "Docs" | "Question",
-  "summary": at most 20 words, plain English,
-  "recommended_action": one short, concrete next step for the product team
+  "feedback_type": "Bug" | "Feature Request" | "UX" | "Docs" | "Question" | "Praise",
+  "summary": at most 20 words, plain English, about the Cloudflare part,
+  "recommended_action": one short, concrete next step for the Cloudflare product team
 }
 
 Guidance:
 - A bug report that blocks deploys or production traffic is "High" urgency.
 - Polite feature requests and neutral questions are usually "Neutral" urgency and sentiment 5-6.
-- Praise ("switched to R2 and our bill dropped", "Workers DX is great") is sentiment 8-10.
+- Praise aimed at Cloudflare ("switched to R2 and our bill dropped", "Workers DX is great") is sentiment 8-10 and type "Praise".
 - Ignore stack traces and log noise when judging sentiment; judge the human's tone and impact.
 No markdown, no prose, JSON only.`;
 
@@ -78,6 +92,36 @@ export function parseModelJson(text) {
 	return JSON.parse(cleaned.slice(start, end + 1));
 }
 
+const isTrue = (v) => v === true || v === 'true' || v === 1;
+
+/**
+ * Relevance-only check (cheaper than full analysis), used to clean up items
+ * stored before the check existed. Returns { about_cloudflare, subject } or
+ * null if the model couldn't answer (callers keep the item in that case).
+ */
+export async function checkAboutCloudflare(env, text, context = '') {
+	try {
+		const res = await env.AI.run(env.AI_MODEL || DEFAULT_TEXT_MODEL, {
+			messages: [
+				{
+					role: 'system',
+					content: `Decide whether a piece of developer feedback is about Cloudflare. Return ONLY JSON with these keys:\n{\n  ${ABOUT_CLOUDFLARE_RULES}\n}`,
+				},
+				{ role: 'user', content: `${context ? context + '\n\n' : ''}Feedback:\n${String(text).slice(0, MAX_LLM_INPUT_CHARS)}` },
+			],
+			max_completion_tokens: 120,
+			temperature: 0,
+			chat_template_kwargs: { enable_thinking: false },
+		});
+		const data = parseModelJson(extractModelText(res));
+		if (data.about_cloudflare === undefined) return null;
+		return { about_cloudflare: isTrue(data.about_cloudflare), subject: typeof data.subject === 'string' ? data.subject.slice(0, 80) : null };
+	} catch (err) {
+		console.error('Relevance check failed:', err?.message || err);
+		return null;
+	}
+}
+
 function clampScore(n) {
 	const v = Math.round(Number(n));
 	if (!Number.isFinite(v)) return 5;
@@ -104,9 +148,12 @@ export async function analyzeFeedback(env, text, context = '') {
 			chat_template_kwargs: { enable_thinking: false },
 		});
 		const data = parseModelJson(extractModelText(aiResponse));
+		const about = isTrue(data.about_cloudflare ?? data.relevant ?? true);
 		return {
 			...data,
-			relevant: data.relevant !== false && data.relevant !== 'false',
+			about_cloudflare: about,
+			relevant: about,
+			subject: typeof data.subject === 'string' ? data.subject.slice(0, 80) : null,
 			sentiment_score: clampScore(data.sentiment_score),
 			_ai_ok: true,
 		};
@@ -121,6 +168,8 @@ export async function analyzeFeedback(env, text, context = '') {
 			summary: text.slice(0, 80),
 			recommended_action: 'Review manually (AI analysis unavailable)',
 			relevant: true, // when unsure, keep it for a human to look at
+			about_cloudflare: true,
+			subject: null,
 			_ai_ok: false,
 		};
 	}
@@ -131,7 +180,7 @@ const COLUMNS = [
 	'urgency_level', 'feedback_type', 'region', 'summary', 'recommended_action',
 	'feedback_status', 'original_text', 'sentiment_score', 'nps_class',
 	'external_id', 'source_url', 'title', 'repo', 'labels', 'source_state',
-	'reactions', 'comments_count', 'source_updated_at', 'ingested_at',
+	'reactions', 'comments_count', 'source_updated_at', 'ingested_at', 'subject', 'relevance_checked',
 ];
 
 /**
@@ -167,6 +216,9 @@ export function buildRecord(item, ai, overrides = {}) {
 		comments_count: item.comments_count ?? 0,
 		source_updated_at: item.source_updated_at ?? null,
 		ingested_at: new Date().toISOString(),
+		subject: ai.subject ?? null,
+		// Only a successful AI answer counts as checked; failures get re-checked later.
+		relevance_checked: ai._ai_ok ? 1 : 0,
 	};
 }
 

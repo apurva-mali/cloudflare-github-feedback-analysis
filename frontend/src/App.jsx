@@ -3,14 +3,12 @@ import { Filter, Link2, RefreshCw, X } from 'lucide-react';
 import cfLogo from './assets/cf-logo-v2.png';
 import { api } from './lib/api.js';
 import { RANGES, SENTIMENTS, STATUS_FILTERS, inInbox, matchesStatus, normalizeFeedback, timeAgo, fullDate, ticketKey } from './lib/format.js';
+import { VIEWS } from './lib/views.js';
 import { useBreakpoint } from './lib/useBreakpoint.js';
 import Overview from './components/Overview.jsx';
-import InboxView from './components/InboxView.jsx';
 import FeedbackView from './components/FeedbackView.jsx';
-import ThemesView from './components/ThemesView.jsx';
 import HighlightsView from './components/HighlightsView.jsx';
 import ProductsView from './components/ProductsView.jsx';
-import DigestView from './components/DigestView.jsx';
 import TicketsView from './components/TicketsView.jsx';
 import DetailDrawer from './components/DetailDrawer.jsx';
 import TicketForm from './components/TicketForm.jsx';
@@ -18,20 +16,17 @@ import './App.css';
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
-  { key: 'inbox', label: 'Inbox' },
   { key: 'feedback', label: 'Feedback' },
-  { key: 'themes', label: 'Themes' },
   { key: 'highlights', label: 'Highlights' },
   { key: 'products', label: 'Products' },
-  { key: 'digest', label: 'Digest' },
   { key: 'tickets', label: 'Tickets' },
 ];
-const FILTERED_TABS = new Set(['overview', 'inbox', 'feedback', 'themes', 'highlights', 'products']);
+const FILTERED_TABS = new Set(['overview', 'feedback', 'highlights', 'products']);
 const FILTER_KEYS = ['source', 'product', 'type', 'urgency', 'status', 'sentiment'];
 const EMPTY_FILTERS = Object.fromEntries(FILTER_KEYS.map((k) => [k, '']));
 const DEFAULT_RANGE = '30d';
 
-// ---- Shareable view state in the URL hash: #tab?range=7d&product=R2&item=… ----
+// ---- Shareable view state in the URL hash: #tab?range=7d&product=R2&view=review&item=… ----
 function parseHash(hash = window.location.hash) {
   const [rawTab, query = ''] = hash.replace(/^#/, '').split('?');
   const p = new URLSearchParams(query);
@@ -40,18 +35,18 @@ function parseHash(hash = window.location.hash) {
     range: RANGES.some((r) => r.key === p.get('range')) ? p.get('range') : DEFAULT_RANGE,
     filters: Object.fromEntries(FILTER_KEYS.map((k) => [k, p.get(k) || ''])),
     query: p.get('q') || '',
+    view: VIEWS[p.get('view')] ? p.get('view') : 'all',
     item: p.get('item') || null,
-    theme: p.get('theme') ? Number(p.get('theme')) : null,
   };
 }
 
-function buildHash({ tab, range, filters, query, item, theme }) {
+function buildHash({ tab, range, filters, query, view, item }) {
   const p = new URLSearchParams();
   if (range !== DEFAULT_RANGE) p.set('range', range);
   for (const k of FILTER_KEYS) if (filters[k]) p.set(k, filters[k]);
   if (query) p.set('q', query);
+  if (tab === 'feedback' && view && view !== 'all') p.set('view', view);
   if (item) p.set('item', item);
-  if (theme) p.set('theme', String(theme));
   const qs = p.toString();
   return `#${tab}${qs ? `?${qs}` : ''}`;
 }
@@ -97,19 +92,19 @@ export default function App() {
   const [range, setRange] = useState(initial.range);
   const [filters, setFilters] = useState(initial.filters);
   const [query, setQuery] = useState(initial.query);
+  const [view, setView] = useState(initial.view);
   const [selectedId, setSelectedId] = useState(initial.item);
-  const [themeFocus, setThemeFocus] = useState(initial.theme);
+  const [navIds, setNavIds] = useState([]);
 
   const [rows, setRows] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [themes, setThemes] = useState([]);
   const [ticketsUnavailable, setTicketsUnavailable] = useState(false);
   const [needsMigration, setNeedsMigration] = useState(false);
   const [sync, setSync] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
 
-  const [ticketDraft, setTicketDraft] = useState(null); // { item } | { theme }
+  const [ticketDraft, setTicketDraft] = useState(null); // feedback item
   const [focusTicket, setFocusTicket] = useState(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
@@ -127,22 +122,19 @@ export default function App() {
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
     setLoadError(null);
-    const [fb, tk, th, st] = await Promise.allSettled([api.feedback(), api.tickets(), api.themes(), api.syncStatus()]);
-    if (fb.status === 'fulfilled') setRows((fb.value.results || []).map(normalizeFeedback));
-    else setLoadError(fb.reason.message);
+    const [fb, tk, st] = await Promise.allSettled([api.feedback(), api.tickets(), api.syncStatus()]);
+    if (fb.status === 'fulfilled') {
+      const raw = fb.value.results || [];
+      setRows(raw.map(normalizeFeedback));
+      // Columns from the latest migration missing → the database needs `npm run db:migrate`.
+      setNeedsMigration(raw.length > 0 && !('relevance_checked' in raw[0]));
+    } else setLoadError(fb.reason.message);
     if (tk.status === 'fulfilled') {
       setTickets(tk.value.tickets || []);
       setTicketsUnavailable(false);
     } else {
       setTickets([]);
       setTicketsUnavailable(/no such table/i.test(tk.reason?.data?.details || ''));
-    }
-    if (th.status === 'fulfilled') {
-      setThemes(th.value.themes || []);
-      setNeedsMigration(false);
-    } else {
-      setThemes([]);
-      setNeedsMigration(/no such (table|column)/i.test(th.reason?.data?.details || ''));
     }
     if (st.status === 'fulfilled') setSync(st.value.streams || []);
     setLoading(false);
@@ -154,9 +146,9 @@ export default function App() {
 
   // ---- URL state -----------------------------------------------------------
   useEffect(() => {
-    const next = buildHash({ tab, range, filters, query, item: selectedId, theme: tab === 'themes' ? themeFocus : null });
+    const next = buildHash({ tab, range, filters, query, view, item: selectedId });
     if (window.location.hash !== next) window.history.replaceState(null, '', next);
-  }, [tab, range, filters, query, selectedId, themeFocus]);
+  }, [tab, range, filters, query, view, selectedId]);
 
   useEffect(() => {
     // Back/forward or a pasted link: adopt the whole view from the URL.
@@ -166,8 +158,8 @@ export default function App() {
       setRange(s.range);
       setFilters(s.filters);
       setQuery(s.query);
+      setView(s.view);
       setSelectedId(s.item);
-      setThemeFocus(s.theme);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
@@ -175,13 +167,13 @@ export default function App() {
 
   const goTab = (key) => {
     if (key === tab) return;
-    window.history.pushState(null, '', buildHash({ tab: key, range, filters, query, item: null, theme: null }));
+    window.history.pushState(null, '', buildHash({ tab: key, range, filters, query, view, item: null }));
     setTab(key);
     setSelectedId(null);
   };
 
   const copyLink = async (item) => {
-    const hash = buildHash({ tab: item ? (tab === 'inbox' ? 'feedback' : tab) : tab, range, filters, query, item: item?.id || null, theme: tab === 'themes' ? themeFocus : null });
+    const hash = buildHash({ tab, range, filters, query, view, item: item?.id || null });
     const url = `${window.location.origin}${window.location.pathname}${hash}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -193,42 +185,49 @@ export default function App() {
 
   // ---- Filtering -----------------------------------------------------------
   const rangeDays = RANGES.find((r) => r.key === range)?.days ?? null;
-  const filtered = useMemo(() => {
+  const matchesFilters = useCallback(
+    (r) =>
+      (!filters.source || r.source === filters.source) &&
+      (!filters.product || r.product === filters.product) &&
+      (!filters.type || r.type === filters.type) &&
+      (!filters.urgency || r.urgency === filters.urgency) &&
+      matchesStatus(r, filters.status) &&
+      (!filters.sentiment || r.sentiment === filters.sentiment),
+    [filters]
+  );
+  // Including dismissed items (the Feedback tab's "Dismissed" view needs them)…
+  const filteredAll = useMemo(() => {
     const cutoff = rangeDays ? Date.now() - rangeDays * 86400000 : null;
-    return rows.filter(
-      (r) =>
-        (!cutoff || new Date(r.timestamp).getTime() >= cutoff) &&
-        (!filters.source || r.source === filters.source) &&
-        (!filters.product || r.product === filters.product) &&
-        (!filters.type || r.type === filters.type) &&
-        (!filters.urgency || r.urgency === filters.urgency) &&
-        matchesStatus(r, filters.status) &&
-        (!filters.sentiment || r.sentiment === filters.sentiment)
-    );
-  }, [rows, rangeDays, filters]);
+    return rows.filter((r) => (!cutoff || new Date(r.timestamp).getTime() >= cutoff) && matchesFilters(r));
+  }, [rows, rangeDays, matchesFilters]);
+  // …and without them, for everything else: dismissed means off-topic or not actionable.
+  const filtered = useMemo(() => filteredAll.filter((r) => r.status !== 'Dismissed'), [filteredAll]);
+  // The same filters over the period before, for "vs previous" comparisons.
+  const previous = useMemo(() => {
+    if (!rangeDays) return null;
+    const end = Date.now() - rangeDays * 86400000;
+    const start = end - rangeDays * 86400000;
+    return rows.filter((r) => {
+      const t = new Date(r.timestamp).getTime();
+      return t >= start && t < end && r.status !== 'Dismissed' && matchesFilters(r);
+    });
+  }, [rows, rangeDays, matchesFilters]);
 
   const options = useMemo(() => {
     const uniq = (key) => [...new Set(rows.map((r) => r[key]))].filter(Boolean).sort();
     return { source: uniq('source'), product: uniq('product'), type: uniq('type') };
   }, [rows]);
 
-  const themesById = useMemo(() => new Map(themes.map((t) => [t.id, t])), [themes]);
   const activeFilters = FILTER_KEYS.filter((k) => filters[k]).length;
   const setFilter = (key) => (value) => setFilters((f) => ({ ...f, [key]: value }));
 
-  const drill = ({ tab: target, ...next }) => {
-    if (target) return goTab(target);
-    setFilters((f) => ({ ...f, ...next }));
-    goTab('feedback');
-  };
-
-  const openTheme = (id) => {
-    setSelectedId(null);
-    setThemeFocus(id);
-    if (tab !== 'themes') {
-      window.history.pushState(null, '', buildHash({ tab: 'themes', range, filters, query, item: null, theme: id }));
-      setTab('themes');
+  const drill = ({ tab: target, view: nextView, ...next }) => {
+    if (nextView) setView(nextView);
+    if (Object.keys(next).length) {
+      setFilters((f) => ({ ...f, ...next }));
+      if (!nextView) setView('all');
     }
+    goTab(target || 'feedback');
   };
 
   // ---- Actions -------------------------------------------------------------
@@ -268,18 +267,14 @@ export default function App() {
 
   const raiseTicket = (item) => {
     if (ticketsUnavailable) return notify('Tickets need a database update first. See the Tickets tab.', 'error');
-    setTicketDraft({ item });
-  };
-  const raiseThemeTicket = (theme) => {
-    const members = rows.filter((r) => r.themeId === theme.id);
-    setTicketDraft({ theme: { ...theme, members } });
+    setTicketDraft(item);
   };
 
   const createTicket = async (payload) => {
     const { ticket } = await api.createTicket(payload); // errors are shown inside the form
     setTicketDraft(null);
     notify(`Created ticket ${ticketKey(ticket.id)}`);
-    await load({ quiet: true }); // statuses may have changed across a whole theme
+    await load({ quiet: true });
   };
 
   const updateTicket = async (id, changes) => {
@@ -308,8 +303,21 @@ export default function App() {
   const lastSync = sync.reduce((latest, s) => (s.last_run_at > (latest || '') ? s.last_run_at : latest), null);
   const syncTitle = sync.map((s) => `${s.stream}: ${fullDate(s.last_run_at)}`).join('\n');
   const openTickets = tickets.filter((t) => t.status !== 'Resolved').length;
-  const inboxCount = useMemo(() => rows.filter(inInbox).length, [rows]);
-  const counts = { inbox: inboxCount, tickets: openTickets };
+  const reviewCount = useMemo(() => rows.filter(inInbox).length, [rows]);
+  const counts = { feedback: reviewCount, tickets: openTickets };
+  const rangeLabel = { '7d': '7 days', '30d': '30 days', '90d': '90 days' }[range] || 'period';
+
+  // Step through the Feedback list from the drawer (j / k).
+  const navIndex = tab === 'feedback' ? navIds.indexOf(selectedId) : -1;
+  const nav =
+    navIndex >= 0
+      ? {
+          index: navIndex,
+          total: navIds.length,
+          onPrev: () => navIndex > 0 && setSelectedId(navIds[navIndex - 1]),
+          onNext: () => navIndex < navIds.length - 1 && setSelectedId(navIds[navIndex + 1]),
+        }
+      : null;
 
   const panelProps = {
     busy,
@@ -317,7 +325,6 @@ export default function App() {
     onUpdate: updateItem,
     onRaiseTicket: raiseTicket,
     onViewTicket: viewTicket,
-    onOpenTheme: openTheme,
     onCopyLink: copyLink,
     setNotesCount,
   };
@@ -346,7 +353,11 @@ export default function App() {
               }}
             >
               {t.label}
-              {counts[t.key] > 0 && <span className="tab-count">{counts[t.key]}</span>}
+              {counts[t.key] > 0 && (
+                <span className="tab-count" title={t.key === 'feedback' ? `${counts[t.key]} to review` : `${counts[t.key]} open`}>
+                  {counts[t.key]}
+                </span>
+              )}
             </a>
           ))}
         </nav>
@@ -428,50 +439,31 @@ export default function App() {
             {tab === 'overview' && (
               <Overview
                 items={filtered}
+                previous={previous}
                 allItems={rows}
                 tickets={tickets}
-                themes={themes}
                 rangeDays={rangeDays}
+                rangeLabel={rangeLabel}
                 onOpen={setSelectedId}
                 onDrill={drill}
-                onOpenTheme={openTheme}
-              />
-            )}
-            {tab === 'inbox' && (
-              <InboxView
-                items={filtered}
-                themesById={themesById}
-                onBulkReview={bulkReview}
-                onOpenDrawer={setSelectedId}
-                paused={drawerOpen || Boolean(ticketDraft)}
-                {...panelProps}
               />
             )}
             {tab === 'feedback' && (
               <FeedbackView
-                items={filtered}
+                items={filteredAll}
+                view={view}
+                setView={setView}
                 selectedId={selectedId}
                 onOpen={setSelectedId}
+                onListChange={setNavIds}
+                onBulkReview={bulkReview}
                 query={query}
                 setQuery={setQuery}
                 onToggleStar={(item) => updateItem(item, { starred: !item.starred }, item.starred ? 'Star removed' : 'Starred')}
               />
             )}
-            {tab === 'themes' && (
-              <ThemesView
-                key={themeFocus || 'themes'}
-                themes={themes}
-                items={filtered}
-                unavailable={needsMigration}
-                focusId={themeFocus}
-                onOpen={setSelectedId}
-                onRaiseThemeTicket={raiseThemeTicket}
-                onViewTicket={viewTicket}
-              />
-            )}
             {tab === 'highlights' && <HighlightsView items={filtered} unavailable={needsMigration} onUpdate={updateItem} onOpen={setSelectedId} notify={notify} />}
-            {tab === 'products' && <ProductsView items={filtered} onDrill={drill} onOpen={setSelectedId} />}
-            {tab === 'digest' && <DigestView onOpen={setSelectedId} onOpenTheme={openTheme} notify={notify} />}
+            {tab === 'products' && <ProductsView items={filtered} onDrill={drill} />}
             {tab === 'tickets' && (
               <TicketsView
                 key={focusTicket || 'tickets'}
@@ -488,15 +480,14 @@ export default function App() {
 
       <DetailDrawer
         item={drawerOpen ? selected : null}
-        theme={selected?.themeId ? themesById.get(selected.themeId) : null}
+        nav={nav}
         onClose={() => setSelectedId(null)}
         {...panelProps}
       />
 
       {ticketDraft && (
         <TicketForm
-          item={ticketDraft.item}
-          theme={ticketDraft.theme}
+          item={ticketDraft}
           products={options.product.filter((p) => p !== 'Unknown')}
           onCancel={() => setTicketDraft(null)}
           onSubmit={createTicket}

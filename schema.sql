@@ -40,13 +40,14 @@ CREATE TABLE feedback (
   dismissed_reason TEXT,
   highlight_tags TEXT,           -- JSON array; non-empty = saved to Highlights
   responded_at TEXT,             -- someone replied to the author upstream
-  theme_id INTEGER,
-  theme_checked INTEGER NOT NULL DEFAULT 0
+
+  -- Relevance
+  subject TEXT,                  -- what the opinion is about, e.g. "Cloudflare R2" or "Hono"
+  relevance_checked INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_feedback_timestamp ON feedback (feedback_timestamp);
 CREATE INDEX idx_feedback_source ON feedback (source);
-CREATE INDEX idx_feedback_theme ON feedback (theme_id);
 CREATE INDEX idx_feedback_inbox ON feedback (reviewed_at, feedback_status);
 
 -- Fetched items judged not to be product feedback, so they are never re-analyzed.
@@ -69,21 +70,9 @@ CREATE TABLE tickets (
   assignee TEXT,
   status TEXT NOT NULL DEFAULT 'Open',    -- Open | In Progress | Resolved
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  theme_id INTEGER                        -- set when the ticket covers a whole theme
-);
-CREATE INDEX idx_tickets_status ON tickets (status);
-
--- Groups of similar feedback
-DROP TABLE IF EXISTS themes;
-CREATE TABLE themes (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT,
-  product TEXT,
-  titled_at_count INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE INDEX idx_tickets_status ON tickets (status);
 
 -- Internal notes on feedback
 DROP TABLE IF EXISTS feedback_notes;
@@ -96,12 +85,13 @@ CREATE TABLE feedback_notes (
 );
 CREATE INDEX idx_notes_feedback ON feedback_notes (feedback_id);
 
--- Weekly digests
-DROP TABLE IF EXISTS digests;
-CREATE TABLE digests (
-  week_start TEXT PRIMARY KEY,
-  body TEXT NOT NULL,
-  created_at TEXT NOT NULL
+-- Cached AI summary per product (last 30 days of feedback)
+DROP TABLE IF EXISTS product_summaries;
+CREATE TABLE product_summaries (
+  product TEXT PRIMARY KEY,
+  summary TEXT NOT NULL,
+  item_count INTEGER NOT NULL,
+  generated_at TEXT NOT NULL
 );
 
 -- One row per ingestion stream, remembering how far we have read.

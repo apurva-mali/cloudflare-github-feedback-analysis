@@ -51,7 +51,7 @@ describe('syncHackerNews (fake bindings)', () => {
 			VECTOR_INDEX: createFakeVectorize(),
 			AI: createScriptedAI([
 				[/egress bill/, { sentiment_score: 9, product_category: 'Unknown', feedback_type: 'UX' }],
-				[/outage news/, { relevant: false }],
+				[/outage news/, { about_cloudflare: false, subject: 'news' }],
 				[/cold starts/, { sentiment_score: 3, product_category: 'Workers', feedback_type: 'Bug' }],
 			]),
 			HN_QUERIES: 'Cloudflare R2,Cloudflare Workers',

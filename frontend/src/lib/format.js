@@ -146,14 +146,13 @@ export function normalizeFeedback(row) {
     ticketId: row.ticket_id ?? null,
     ticketStatus: str(row.ticket_status) || null,
     ticketPriority: str(row.ticket_priority) || null,
-    ticketViaTheme: Boolean(row.ticket_via_theme),
     // Triage
     starred: Boolean(Number(row.starred)),
     reviewedAt: str(row.reviewed_at) || null,
     dismissedReason: str(row.dismissed_reason) || null,
     highlightTags: parseLabels(row.highlight_tags),
     respondedAt: str(row.responded_at) || null,
-    themeId: row.theme_id ?? null,
+    subject: str(row.subject) || null,
     notesCount: Number(row.notes_count) || 0,
   };
 }
@@ -173,7 +172,7 @@ export const needsReply = (item) => item.status === 'Resolved' && Boolean(item.u
 export const HIGHLIGHT_TAGS = ['Customer story', 'Launch quote', 'Team shout-out', 'Competitive win'];
 export const DISMISS_REASONS = ['Duplicate', 'Not actionable', 'Off-topic', 'Spam', 'Other'];
 
-export const STATUS_FILTERS = ['Open', 'Ticket Raised', 'Resolved', 'Dismissed', 'Starred', 'Closed on GitHub', 'Needs reply'];
+export const STATUS_FILTERS = ['Open', 'Ticket Raised', 'Resolved', 'Closed on GitHub', 'Needs reply'];
 
 export function matchesStatus(item, status) {
   if (!status) return true;

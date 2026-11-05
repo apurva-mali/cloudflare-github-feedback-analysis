@@ -4,49 +4,48 @@
  * Routes
  *   GET    /all                     all feedback rows (dashboard)
  *   GET    /search?q=               semantic search via Vectorize
- *   GET    /themes                  groups of similar feedback
- *   GET    /digests[?week=]         weekly digest + available weeks
- *   POST   /digests/generate        build this week's digest now (throttled)
+ *   GET    /products/summaries      cached AI summary per product
+ *   POST   /products/summaries/refresh  rewrite stale summaries now (throttled)
  *   PATCH  /feedback/:id            status, dismiss, star, reviewed, highlight tags, replied
  *   POST   /feedback/bulk           same changes for many ids
  *   GET    /feedback/:id/notes      internal notes
  *   POST   /feedback/:id/notes      add a note
  *   DELETE /notes/:id               delete a note
  *   GET    /tickets                 all support tickets
- *   POST   /tickets                 raise a ticket (optionally for a whole theme)
+ *   POST   /tickets                 raise a ticket from a feedback item
  *   PATCH  /tickets/:id             update status / priority / assignee / team
  *   GET    /sync/status             last sync result per stream
- *   POST   /sync/:source            github | hackernews | themes | all          (admin)
+ *   POST   /sync/:source            github | hackernews | relevance | summaries | all   (admin)
  *                                   ?max=N  per-run cap, ?since_days=N  GitHub one-off backfill
  *   POST   /ingest                  ingest one manual feedback item             (admin)
  *
- * Cron: hourly → every source then themes; Mondays → last week's digest.
+ * Cron: hourly → GitHub, Hacker News, relevance clean-up, product summaries.
  */
 
 import { CORS_HEADERS, json, isAuthorized } from './http.js';
 import { analyzeFeedback, buildRecord, storeRecords, EMBEDDING_MODEL } from './pipeline.js';
 import { syncGitHub } from './github.js';
 import { syncHackerNews } from './hackernews.js';
-import { syncThemes, listThemes } from './themes.js';
-import { getDigests, handleGenerate, weeklyDigest } from './digest.js';
+import { syncRelevance } from './relevance.js';
+import { refreshSummaries, listSummaries } from './products.js';
 import { listTickets, createTicket, updateTicket } from './tickets.js';
 import { updateFeedback, bulkUpdateFeedback, listNotes, addNote, deleteNote } from './feedback.js';
 
-export const DIGEST_CRON = '7 13 * * 1';
-
-// Order matters: themes runs last so it groups what the sources just added.
+// Order matters: clean-up and summaries run after the sources add new items.
 const SYNCS = {
 	github: syncGitHub,
 	hackernews: syncHackerNews,
-	themes: syncThemes,
+	relevance: syncRelevance,
+	summaries: refreshSummaries,
 };
+const SOURCE_SYNCS = new Set(['github', 'hackernews']);
 
 /** Run sources one after another; one failing never blocks the others. */
 async function syncAll(env, opts = {}) {
 	const out = {};
 	for (const [name, run] of Object.entries(SYNCS)) {
 		try {
-			out[name] = await run(env, name === 'themes' ? {} : opts);
+			out[name] = await run(env, SOURCE_SYNCS.has(name) ? opts : {});
 		} catch (err) {
 			console.error(`${name} sync failed:`, err);
 			out[name] = { error: err?.message || String(err) };
@@ -93,14 +92,10 @@ async function handleIngest(request, env) {
 }
 
 const ALL_QUERIES = [
-	// Current schema: ticket on the item itself or on its theme, plus note count.
-	`SELECT f.*,
-	        COALESCE(td.id, tt.id) AS ticket_id, COALESCE(td.status, tt.status) AS ticket_status,
-	        COALESCE(td.priority, tt.priority) AS ticket_priority, (td.id IS NULL AND tt.id IS NOT NULL) AS ticket_via_theme,
+	// Current schema: ticket and note count per item.
+	`SELECT f.*, t.id AS ticket_id, t.status AS ticket_status, t.priority AS ticket_priority,
 	        (SELECT COUNT(*) FROM feedback_notes n WHERE n.feedback_id = f.id) AS notes_count
-	 FROM feedback f
-	 LEFT JOIN tickets td ON td.feedback_id = f.id
-	 LEFT JOIN tickets tt ON f.theme_id IS NOT NULL AND tt.theme_id = f.theme_id AND tt.feedback_id != f.id
+	 FROM feedback f LEFT JOIN tickets t ON t.feedback_id = f.id
 	 ORDER BY f.feedback_timestamp DESC`,
 	// Before migration 0003.
 	`SELECT f.*, t.id AS ticket_id, t.status AS ticket_status, t.priority AS ticket_priority
@@ -176,9 +171,8 @@ export default {
 			const noteMatch = path.match(/^\/notes\/(\d+)$/);
 			if (noteMatch && method === 'DELETE') return await deleteNote(Number(noteMatch[1]), env);
 
-			if (method === 'GET' && path === '/themes') return await listThemes(env);
-			if (method === 'GET' && path === '/digests') return await getDigests(url, env);
-			if (method === 'POST' && path === '/digests/generate') return await handleGenerate(request, env);
+			if (method === 'GET' && path === '/products/summaries') return await listSummaries(env);
+			if (method === 'POST' && path === '/products/summaries/refresh') return json(await refreshSummaries(env));
 
 			if (path === '/tickets' && method === 'GET') return await listTickets(env);
 			if (path === '/tickets' && method === 'POST') return await createTicket(request, env);
@@ -205,10 +199,6 @@ export default {
 	},
 
 	async scheduled(controller, env, ctx) {
-		if (controller.cron === DIGEST_CRON) {
-			ctx.waitUntil(weeklyDigest(env).then((d) => console.log('Weekly digest written for', d.week_start)));
-			return;
-		}
 		ctx.waitUntil(syncAll(env).then((summary) => console.log('Scheduled sync:', JSON.stringify(summary))));
 	},
 };

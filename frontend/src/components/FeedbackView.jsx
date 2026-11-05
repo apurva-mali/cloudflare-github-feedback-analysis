@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search, Sparkles, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, CheckCheck, ChevronLeft, ChevronRight, Search, Sparkles, X } from 'lucide-react';
 import { EmptyState, SentimentTag, SourceTag, StarButton, StatusTag, UrgencyTag } from './bits.jsx';
-import { URGENCY_ORDER, timeAgo, fullDate } from '../lib/format.js';
+import { URGENCY_ORDER, plural, timeAgo, fullDate } from '../lib/format.js';
+import { VIEWS } from '../lib/views.js';
 import { api } from '../lib/api.js';
 import { useBreakpoint } from '../lib/useBreakpoint.js';
 
@@ -31,7 +32,8 @@ function SortHeader({ id, label, sort, setSort, className }) {
   );
 }
 
-export default function FeedbackView({ items, selectedId, onOpen, query, setQuery, onToggleStar }) {
+export default function FeedbackView({ items, view, setView, selectedId, onOpen, onListChange, onBulkReview, query, setQuery, onToggleStar }) {
+  const [confirmAll, setConfirmAll] = useState(false);
   const [mode, setMode] = useState('keyword'); // keyword | meaning
   const [semantic, setSemantic] = useState(null); // { query, ids: Map<id, score> } | { error }
   const [searching, setSearching] = useState(false);
@@ -41,7 +43,9 @@ export default function FeedbackView({ items, selectedId, onOpen, query, setQuer
   const wide = bp === 'lg';
   const showProduct = bp !== 'sm';
 
-  useEffect(() => setPage(0), [items.length, query, mode, semantic, sort]);
+  useEffect(() => setPage(0), [items.length, view, query, mode, semantic, sort]);
+
+  const viewCounts = useMemo(() => Object.fromEntries(Object.entries(VIEWS).map(([k, v]) => [k, items.filter(v.test).length])), [items]);
 
   const runSemantic = async () => {
     const q = query.trim();
@@ -58,7 +62,7 @@ export default function FeedbackView({ items, selectedId, onOpen, query, setQuer
   };
 
   const rows = useMemo(() => {
-    let list = items;
+    let list = items.filter((VIEWS[view] || VIEWS.all).test);
     if (mode === 'keyword' && query.trim()) {
       const q = query.trim().toLowerCase();
       list = list.filter((i) =>
@@ -73,7 +77,16 @@ export default function FeedbackView({ items, selectedId, onOpen, query, setQuer
     const sorted = [...list].sort(cmp);
     const natural = sort.key === 'date' ? 'desc' : 'asc';
     return sort.dir === natural ? sorted : sorted.reverse();
-  }, [items, query, mode, semantic, sort]);
+  }, [items, view, query, mode, semantic, sort]);
+
+  // The drawer steps through exactly this list (j/k), across pages.
+  useEffect(() => onListChange(rows.map((r) => r.id)), [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep the selected item's page in view while stepping through.
+  useEffect(() => {
+    const idx = rows.findIndex((r) => r.id === selectedId);
+    if (idx >= 0 && Math.floor(idx / PAGE_SIZE) !== page) setPage(Math.floor(idx / PAGE_SIZE));
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const visible = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -85,6 +98,31 @@ export default function FeedbackView({ items, selectedId, onOpen, query, setQuer
 
   return (
     <div className="feedback-view">
+      <div className="view-tabs" role="group" aria-label="Show">
+        {Object.entries(VIEWS).map(([k, v]) => (
+          <button key={k} type="button" aria-pressed={view === k} className={view === k ? 'active' : ''} onClick={() => setView(k)}>
+            {v.label}
+            <span className="view-count">{viewCounts[k]}</span>
+          </button>
+        ))}
+        {view === 'review' && rows.length > 0 && (
+          <>
+            <span className="view-hint muted">Open one, then use j and k to move and r to mark reviewed.</span>
+            <button
+              type="button"
+              className={`btn ${confirmAll ? 'danger' : 'ghost'} push-right`}
+              onClick={() => {
+                if (!confirmAll) return setConfirmAll(true);
+                setConfirmAll(false);
+                onBulkReview(rows.map((r) => r.id));
+              }}
+              onBlur={() => setConfirmAll(false)}
+            >
+              <CheckCheck size={16} aria-hidden="true" /> {confirmAll ? `Confirm: mark ${plural(rows.length, 'item')} reviewed` : 'Mark all reviewed'}
+            </button>
+          </>
+        )}
+      </div>
       <div className="toolbar">
         <form
           className="search"
@@ -134,9 +172,13 @@ export default function FeedbackView({ items, selectedId, onOpen, query, setQuer
       )}
 
       {rows.length === 0 ? (
-        <EmptyState title="No feedback matches">
-          {query ? 'Try other words, or switch search mode.' : 'Clear a filter or widen the time range.'}
-        </EmptyState>
+        view === 'review' && !query ? (
+          <EmptyState title="All caught up">Everything in this view has been reviewed. New feedback arrives every hour.</EmptyState>
+        ) : (
+          <EmptyState title="No feedback matches">
+            {query ? 'Try other words, or switch search mode.' : 'Clear a filter, pick another view, or widen the time range.'}
+          </EmptyState>
+        )
       ) : (
         <>
           <div className="table-wrap">

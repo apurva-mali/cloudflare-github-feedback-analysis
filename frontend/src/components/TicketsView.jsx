@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Layers, MessageSquareReply } from 'lucide-react';
+import { MessageSquareReply } from 'lucide-react';
 import { EmptyState, SourceTag } from './bits.jsx';
 import { PRIORITIES, TICKET_STATUSES, fullDate, ticketKey, timeAgo } from '../lib/format.js';
 import { useBreakpoint } from '../lib/useBreakpoint.js';
@@ -114,13 +114,7 @@ export default function TicketsView({ tickets, unavailable, focusId, onUpdate, o
                       <span className="fb-title">{t.title}</span>
                     </button>
                     <span className="fb-sub">
-                      {t.theme_id ? (
-                        <span className="ticket-theme">
-                          <Layers size={13} aria-hidden="true" /> Theme: {t.theme_title || 'related feedback'} ({t.theme_size})
-                        </span>
-                      ) : (
-                        t.source && <SourceTag source={t.source} />
-                      )}
+                      {t.source && <SourceTag source={t.source} />}
                       <span title={fullDate(t.created_at)}>Raised {timeAgo(t.created_at)}</span>
                       {needsReplyTicket(t) && (
                         <button type="button" className="mini-flag as-btn" onClick={() => onOpenFeedback(t.feedback_id)}>
