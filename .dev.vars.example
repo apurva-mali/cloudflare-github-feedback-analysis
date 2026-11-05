@@ -1,0 +1,7 @@
+# Copy to .dev.vars for local `wrangler dev` (never commit the real file).
+# Fine-grained GitHub token, public repositories read-only. Optional, but without it
+# GitHub allows only 60 requests/hour.
+GITHUB_TOKEN=
+# Optional locally. If set, POST /ingest and POST /sync/github need
+# "Authorization: Bearer <ADMIN_TOKEN>".
+ADMIN_TOKEN=

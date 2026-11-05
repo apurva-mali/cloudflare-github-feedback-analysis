@@ -1,0 +1,60 @@
+/**
+ * Wrangler config for the GitHub-feedback edition of Cloudflare Voice.
+ * Uses its OWN Worker name, D1 database and Vectorize index, so deploying it
+ * never touches the original synthetic-data dashboard.
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "cloudflare-github-feedback",
+	"main": "src/index.js",
+	"compatibility_date": "2025-12-01",
+	"observability": {
+		"enabled": true
+	},
+
+	// Pull new GitHub issues every hour (at :17 to avoid the top-of-hour rush).
+	"triggers": {
+		"crons": ["17 * * * *"]
+	},
+
+	/**
+	 * Non-secret settings. Secrets (set with `npx wrangler secret put <NAME>`):
+	 *   GITHUB_TOKEN  – fine-grained token with public-repo read access (raises limit 60 → 5,000 req/h)
+	 *   ADMIN_TOKEN   – required as `Authorization: Bearer …` on POST /ingest and POST /sync/github
+	 */
+	"vars": {
+		// Comma-separated public repos to read issues from.
+		"GITHUB_REPOS": "cloudflare/workers-sdk",
+		// How far back to look on the very first sync.
+		"GITHUB_BACKFILL_DAYS": "14",
+		// Cap on NEW issues analyzed per run (each costs one LLM call).
+		"GITHUB_MAX_NEW_PER_RUN": "15",
+		// Cloudflare staff issues are internal, not customer feedback; set "true" to include them.
+		"GITHUB_INCLUDE_STAFF": "false",
+		// Text model for analysis (llama-3-8b-instruct was deprecated 2026-05-30).
+		"AI_MODEL": "@cf/zai-org/glm-4.7-flash"
+	},
+
+	"assets": {
+		"directory": "./frontend/dist",
+		"binding": "ASSETS"
+	},
+	"ai": {
+		"binding": "AI"
+	},
+	"vectorize": [
+		{
+			"binding": "VECTOR_INDEX",
+			"index_name": "feedback-github-index"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "feedback-github-db",
+			// Replace after running: npx wrangler d1 create feedback-github-db
+			"database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+		}
+	]
+}

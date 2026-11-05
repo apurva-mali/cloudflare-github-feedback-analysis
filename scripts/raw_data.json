@@ -1,0 +1,496 @@
+
+[
+    {
+      "text": "@CloudflareHelp getting 522 errors on my personal portfolio. Is London region having issues? #down",
+      "source": "Twitter",
+      "user_id": "@dev_dave99",
+      "region": "GB",
+      "timestamp": "2024-01-15T08:42:00Z"
+    },
+    {
+      "text": "Just switched our entire e-commerce frontend to Cloudflare Pages + Workers. The speed difference is insane. Goodbye AWS Amplify! 🚀 #webdev #performance",
+      "source": "Twitter",
+      "user_id": "@ShopTechCTO",
+      "region": "US",
+      "timestamp": "2024-01-14T14:20:15Z"
+    },
+    {
+      "text": "Is anyone else seeing high latency on R2 uploads via the S3 compat API? My build pipeline is timing out.",
+      "source": "Twitter",
+      "user_id": "@rust_engineer",
+      "region": null,
+      "timestamp": "2024-01-12T09:11:00Z"
+    },
+    {
+      "text": "hey @Cloudflare why is my bill $50 higher this month? I thought workers requests were included in the bundle?",
+      "source": "Twitter",
+      "user_id": "@indieHacker_x",
+      "region": "CA",
+      "timestamp": "2024-01-10T18:05:30Z"
+    },
+    {
+      "text": "Cloudflare Zero Trust is literally saving my life with these new remote contractors. Setup took 5 mins. #security",
+      "source": "Twitter",
+      "user_id": "@SecOpsSarah",
+      "region": "US",
+      "timestamp": "2024-01-16T11:30:00Z"
+    },
+    {
+      "text": "Our production API is throwing 1015 Rate Limited errors but we whitelisted the IPs in WAF. What is going on?? @CloudflareHelp",
+      "source": "Twitter",
+      "user_id": "@FinTechOps",
+      "region": "SG",
+      "timestamp": "2024-01-17T02:15:00Z"
+    },
+    {
+      "text": "Turnstile > reCAPTCHA. Cleaner, faster, and my users don't have to identify traffic lights anymore. 🚦🚫",
+      "source": "Twitter",
+      "user_id": "@UX_Designer_Joy",
+      "region": null,
+      "timestamp": "2024-01-08T16:45:00Z"
+    },
+    {
+      "text": "wrangler dev isn't syncing with the dashboard vars. Is this a known bug in 3.0? #coding",
+      "source": "Twitter",
+      "user_id": "@CodeWiz",
+      "region": "DE",
+      "timestamp": "2024-01-05T10:10:10Z"
+    },
+    {
+      "text": "Seriously? Another outage in the EWR POP? My game servers are lagging out. fix it.",
+      "source": "Twitter",
+      "user_id": "@GamerHostAdmin",
+      "region": "US",
+      "timestamp": "2024-01-18T19:22:00Z"
+    },
+    {
+      "text": "D1 is cool but when are we getting point-in-time recovery? hard to sell this to my boss for prod without backups.",
+      "source": "Twitter",
+      "user_id": "@DBA_Guru",
+      "region": null,
+      "timestamp": "2024-01-11T13:00:00Z"
+    },
+    {
+      "text": "Just blocked a massive DDoS attack (40M rps) on the free tier. Cloudflare you distinct legends. 🛡️",
+      "source": "Twitter",
+      "user_id": "@BlogOwner1",
+      "region": "BR",
+      "timestamp": "2024-01-09T22:50:00Z"
+    },
+    {
+      "text": "Need help implementing partial zone setup. The docs are confusing for CNAME flattening. @CloudflareHelp",
+      "source": "Twitter",
+      "user_id": "@SysAdminTom",
+      "region": "AU",
+      "timestamp": "2024-01-07T04:30:00Z"
+    },
+    {
+      "text": "Waiting for Vectorize to support larger dimensions. 1536 isn't enough for our new embedding models.",
+      "source": "Twitter",
+      "user_id": "@AI_Startup_HQ",
+      "region": "FR",
+      "timestamp": "2024-01-13T15:15:00Z"
+    },
+    {
+      "text": "Can we talk about how good Hyperdrive makes connecting to legacy Postgres dbs? Latency dropped 80ms.",
+      "source": "Twitter",
+      "user_id": "@FullStackMatt",
+      "region": "US",
+      "timestamp": "2024-01-15T20:00:00Z"
+    },
+    {
+      "text": "Stream player is broken on iOS Safari 17.2. Video keeps buffering. Anyone else?",
+      "source": "Twitter",
+      "user_id": "@MobileDevLife",
+      "region": null,
+      "timestamp": "2024-01-18T09:00:00Z"
+    },
+    {
+      "text": "Title: R2 vs S3 for high volume image hosting?\n\nBody: We are currently spending about $4k/month on AWS S3 egress fees. I'm looking at R2 because of the zero egress pricing, but I'm worried about reliability. Has anyone migrated a library of >10TB to R2? How was the migration tool? Also, are presigned URLs fully compatible with existing S3 SDKs or did you have to rewrite the backend logic? Thanks.",
+      "source": "Reddit",
+      "user_id": "u/cloud_architect_88",
+      "region": null,
+      "timestamp": "2024-01-10T14:30:00Z"
+    },
+    {
+      "text": "Title: Workers KV eventual consistency gotcha\n\nBody: Just spent 3 days debugging a race condition. I write a key in one worker and try to read it immediately in another request, but it's returning stale data. I know it's eventually consistent, but the propagation delay seems to be getting worse in the APAC region. Is Durable Objects the only solution here? It feels like overkill and too expensive for just simple session storage.",
+      "source": "Reddit",
+      "user_id": "u/serverless_fan",
+      "region": "JP",
+      "timestamp": "2024-01-12T08:15:00Z"
+    },
+    {
+      "text": "Title: How to handle CORS with Cloudflare Images?\n\nBody: I'm trying to serve images from a custom domain mapped to Cloudflare Images, but my React app is getting blocked by CORS. I've set the allowed origins in the dashboard, but the headers aren't showing up in the response. Do I need a Worker in front of the Images API to manually inject the Access-Control-Allow-Origin header? This seems like it should work out of the box.",
+      "source": "Reddit",
+      "user_id": "u/frontend_newbie",
+      "region": "US",
+      "timestamp": "2024-01-14T19:45:00Z"
+    },
+    {
+      "text": "Title: Managed Challenge vs JS Challenge - False Positives?\n\nBody: We turned on 'Super Bot Fight Mode' last week. It's great for blocking scrapers, but we're getting reports from legitimate users on mobile networks (mostly T-Mobile IPv6) getting stuck in a loop. They pass the turnstile, reload, and get challenged again. Is there a way to relax the sensitivity just for specific ASNs without disabling the bot protection entirely?",
+      "source": "Reddit",
+      "user_id": "u/security_ninja",
+      "region": "DE",
+      "timestamp": "2024-01-09T11:20:00Z"
+    },
+    {
+      "text": "Title: Terraform Provider 4.0 breaking changes\n\nBody: The new major version of the terraform provider completely broke our zone settings automation. The documentation on the `cloudflare_ruleset` resource is incredibly vague regarding the syntax for the expression fields. Does anyone have a working example of a WAF override rule in HCL for version 4.x?",
+      "source": "Reddit",
+      "user_id": "u/devops_danny",
+      "region": "US",
+      "timestamp": "2024-01-16T15:00:00Z"
+    },
+    {
+      "text": "Subject: URGENT: Production Outage - Load Balancer Health Checks Failing\n\nWe are currently experiencing a P0 incident. Our primary origin servers are healthy (verified via direct IP), but the Cloudflare Load Balancer is marking all pools as 'Critical' and serving 522 errors to customers. We are on the Enterprise plan (Contract #ENT-9921). We need an engineer to look at the edge logs immediately. We are losing approximately $10k/minute in transaction volume.",
+      "source": "Support Ticket",
+      "user_id": "cust_ent_5501",
+      "region": "US",
+      "timestamp": "2024-01-18T10:05:00Z"
+    },
+    {
+      "text": "Subject: SSO Integration Issue with Okta\n\nHello, we are trying to configure Cloudflare Access for our internal dashboard. We have followed the guide for SAML setup with Okta, but users are receiving a 'Invalid Audience' error upon redirect. Can you please check the logs for our account ID 88392? This is blocking our internal launch scheduled for Monday.",
+      "source": "Support Ticket",
+      "user_id": "cust_corp_2210",
+      "region": "GB",
+      "timestamp": "2024-01-15T13:45:00Z"
+    },
+    {
+      "text": "Subject: Billing Invoice Discrepancy - Inv #CF-2023-12\n\nHi Support, looking at our December invoice, we were charged for 50 million Worker requests, but our internal logging only shows about 15 million. Also, we are seeing a charge for 'Advanced Certificate Manager' which we thought was included in the Biz plan. Please clarify or adjust the invoice.",
+      "source": "Support Ticket",
+      "user_id": "cust_smb_4402",
+      "region": "US",
+      "timestamp": "2024-01-05T09:30:00Z"
+    },
+    {
+      "text": "Subject: Request to increase API rate limits\n\nWe are running a migration script to configure 500 new zones via the API. We are hitting the 1200 req/5min limit constantly. Can we get a temporary lift on this limit for the next 48 hours? We are an Enterprise customer.",
+      "source": "Support Ticket",
+      "user_id": "cust_ent_1102",
+      "region": "DE",
+      "timestamp": "2024-01-12T08:00:00Z"
+    },
+    {
+      "text": "Subject: False Positive on WAF Rule 100035\n\nOur marketing team is trying to update the CMS, but the 'SQL Injection' managed rule is blocking their POST requests. It seems to be triggering on the word 'union' in the blog text. We cannot disable this rule globally due to compliance. How do we whitelist just this specific endpoint?",
+      "source": "Support Ticket",
+      "user_id": "cust_biz_3391",
+      "region": "FR",
+      "timestamp": "2024-01-14T11:15:00Z"
+    },
+    {
+      "text": "Subject: Dedicated IP Address Allocation\n\nWe requested two dedicated IP addresses for our zone (example.com) via the dashboard 3 days ago but the status is still 'Provisioning'. We need these IPs to whitelist them with our payment gateway provider. What is the ETA?",
+      "source": "Support Ticket",
+      "user_id": "cust_biz_7721",
+      "region": "IN",
+      "timestamp": "2024-01-17T06:45:00Z"
+    },
+    {
+      "text": "Subject: Logpush failing to connect to Datadog\n\nOur Logpush job has been in a 'Failing' state since 2 AM. The error message is 'Destination unreachable'. We verified our Datadog API keys and they are valid. Has Cloudflare changed the egress IP ranges for logpush? We restrict ingress on the Datadog side.",
+      "source": "Support Ticket",
+      "user_id": "cust_ent_9910",
+      "region": "US",
+      "timestamp": "2024-01-18T14:20:00Z"
+    },
+    {
+      "text": "Subject: Magic Transit BGP Flapping\n\nWe are seeing instability in the GRE tunnels to the Frankfurt data center. BGP sessions are dropping every 15 minutes. This is affecting our VoIP traffic quality. Please investigate the health of the FRA router connected to our ASN.",
+      "source": "Support Ticket",
+      "user_id": "cust_ent_telco",
+      "region": "DE",
+      "timestamp": "2024-01-11T16:50:00Z"
+    },
+    {
+      "text": "Subject: Account Lockout - Lost 2FA\n\nI lost my phone and cannot access my Google Authenticator. I don't have the backup codes. I am the only admin for this account. Please help me recover access. I can provide credit card details for verification.",
+      "source": "Support Ticket",
+      "user_id": "cust_free_0021",
+      "region": null,
+      "timestamp": "2024-01-08T10:10:00Z"
+    },
+    {
+      "text": "Subject: Argo Smart Routing Performance\n\nWe enabled Argo Smart Routing last month but our TTFB in Asia hasn't improved as expected. In fact, it looks slightly slower for users in Vietnam. Can you provide a performance report or debug data showing the routed paths?",
+      "source": "Support Ticket",
+      "user_id": "cust_biz_5512",
+      "region": "VN",
+      "timestamp": "2024-01-13T03:30:00Z"
+    },
+    {
+      "text": "Subject: SLA Breach - Credit Request\n\nRef Ticket #99281. The dashboard was unavailable for 45 minutes on Jan 10th. Per our Enterprise SLA, we are eligible for a service credit. Please confirm the amount and apply it to the next invoice.",
+      "source": "Support Ticket",
+      "user_id": "cust_ent_fin_99",
+      "region": "US",
+      "timestamp": "2024-01-12T15:00:00Z"
+    },
+    {
+      "text": "Subject: Image Resizing failing for large JPEGs\n\nWhen we try to resize images larger than 10MB using the URL format, we get a 400 error. The docs say the limit is 100MB for our plan. Here is a sample URL... [link removed].",
+      "source": "Support Ticket",
+      "user_id": "cust_pro_1120",
+      "region": "US",
+      "timestamp": "2024-01-16T12:00:00Z"
+    },
+    {
+      "text": "Subject: China Network Access\n\nWe are an Enterprise customer looking to enable the China Network add-on. Our legal team needs to know the specific ICP license requirements for hosting static content on Cloudflare Pages within mainland China. Can you schedule a call with a solution architect?",
+      "source": "Support Ticket",
+      "user_id": "cust_ent_gl_22",
+      "region": "CN",
+      "timestamp": "2024-01-07T20:00:00Z"
+    },
+    {
+      "text": "Subject: Universal SSL stuck on 'Initializing'\n\nI added my domain 24 hours ago and the SSL certificate status is still 'Initializing'. I can't access my site via HTTPS. DNS is set to Proxied (Orange cloud).",
+      "source": "Support Ticket",
+      "user_id": "cust_free_8811",
+      "region": "BR",
+      "timestamp": "2024-01-05T18:45:00Z"
+    },
+    {
+      "text": "Subject: Custom Hostnames (SSL for SaaS) Limit\n\nWe are hitting the limit of 100 custom hostnames on our current plan. We need to scale to 5,000 hostnames for our platform users. What is the pricing structure for this volume? Do we need to upgrade to Enterprise?",
+      "source": "Support Ticket",
+      "user_id": "cust_biz_saas",
+      "region": "US",
+      "timestamp": "2024-01-14T09:15:00Z"
+    },
+    {
+      "text": "Subject: Workers CPU Limit Exceeded\n\nWe are getting 1102 errors. Our worker does some heavy image processing. Is there a way to buy more CPU time (Unbound) without moving to the pay-as-you-go model for everything? We want to keep the bundle pricing for requests.",
+      "source": "Support Ticket",
+      "user_id": "cust_pro_4491",
+      "region": "AU",
+      "timestamp": "2024-01-10T23:00:00Z"
+    },
+    {
+      "text": "Subject: Gateway Policy not filtering DNS\n\nI set up a Gateway rule to block 'Gambling' categories for my office location. I verified the DoH setup on the router, but I can still access gambling sites. The logs show the queries are resolving via Cloudflare but the policy isn't matching.",
+      "source": "Support Ticket",
+      "user_id": "cust_teams_11",
+      "region": "GB",
+      "timestamp": "2024-01-15T10:30:00Z"
+    },
+    {
+      "text": "Subject: Cannot delete R2 bucket\n\nThe dashboard says the bucket is not empty, but when I list objects it shows 0 files. I think there might be hidden multipart uploads that were never completed. How do I purge this so I can delete the bucket?",
+      "source": "Support Ticket",
+      "user_id": "cust_dev_7733",
+      "region": null,
+      "timestamp": "2024-01-09T14:40:00Z"
+    },
+    {
+      "text": "Subject: Bot Fight Mode blocking PayPal IPN\n\nWe are missing payment notifications because the 'Bot Fight Mode' is challenging the PayPal IPN webhooks. We cannot add a Firewall Rule to bypass it because Bot Fight Mode runs before WAF rules. This is critical for our business.",
+      "source": "Support Ticket",
+      "user_id": "cust_pro_8822",
+      "region": "US",
+      "timestamp": "2024-01-18T17:10:00Z"
+    },
+    {
+      "text": "Subject: Cancellation of Service\n\nWe are moving to Fastly. The support response time for our last three incidents was unacceptable for the price we are paying. Please cancel our subscription effective end of billing cycle.",
+      "source": "Support Ticket",
+      "user_id": "cust_biz_churn",
+      "region": "US",
+      "timestamp": "2024-01-19T08:00:00Z"
+    },
+    {
+      "text": "Hi Team, I really love the new GraphQL analytics API, but I'm struggling to find a way to query 'Bytes by ASN'. The documentation lists it as a field, but my queries return null. Is this restricted to Enterprise plans? If so, can you update the docs?",
+      "source": "Email",
+      "user_id": "dev_lead@techcorp.com",
+      "region": "US",
+      "timestamp": "2024-01-06T09:15:00Z"
+    },
+    {
+      "text": "When will Vectorize support metadata filtering? We are building a RAG application and need to filter chunks by document_id before searching. Currently we have to do this post-query which is inefficient.",
+      "source": "Email",
+      "user_id": "ai_researcher@startup.io",
+      "region": "IL",
+      "timestamp": "2024-01-11T14:00:00Z"
+    },
+    {
+      "text": "I received an email about my domain expiring, but I transferred it to Cloudflare Registrar 6 months ago and set it to auto-renew. The dashboard shows 'Active' but the email says 'Expires in 3 days'. Please verify.",
+      "source": "Email",
+      "user_id": "admin@hobbyblog.net",
+      "region": "CA",
+      "timestamp": "2024-01-17T19:30:00Z"
+    },
+    {
+      "text": "To whom it may concern, we are a large healthcare provider looking to use Cloudflare Access to secure our internal patient portals. We need a BAA (Business Associate Agreement) for HIPAA compliance. Who should we speak to regarding enterprise contracts?",
+      "source": "Email",
+      "user_id": "cto@healthplus.org",
+      "region": "US",
+      "timestamp": "2024-01-08T11:00:00Z"
+    },
+    {
+      "text": "Feature Request: Can you please add Python support to Cloudflare Workers? I know you have it in beta, but we need it for production. Our entire data science team writes in Python and we don't want to port to JS/Wasm manually.",
+      "source": "Email",
+      "user_id": "eng_manager@dataco.com",
+      "region": "DE",
+      "timestamp": "2024-01-12T16:20:00Z"
+    },
+    {
+      "text": "I am trying to use Email Routing. I have verified the destination address, but emails are bouncing with '550 Unrouteable address'. My MX records look correct. Screenshot attached.",
+      "source": "Email",
+      "user_id": "me@personal-site.com",
+      "region": null,
+      "timestamp": "2024-01-10T21:45:00Z"
+    },
+    {
+      "text": "Feedback on the new Dashboard Navigation: It is very confusing. I used to be able to find the DNS settings in one click, now it takes three. Please consider reverting or adding a 'Quick Actions' sidebar.",
+      "source": "Email",
+      "user_id": "webmaster@agency.co.uk",
+      "region": "GB",
+      "timestamp": "2024-01-15T10:00:00Z"
+    },
+    {
+      "text": "Hello, we noticed a discrepancy in the analytics for our Zone. Cloudflare reports 100k unique visitors, but Google Analytics reports 20k. We know there is bot traffic, but this gap seems excessive. Is Cloudflare counting search crawlers as unique visitors?",
+      "source": "Email",
+      "user_id": "marketing@shop123.com",
+      "region": "US",
+      "timestamp": "2024-01-13T13:10:00Z"
+    },
+    {
+      "text": "We are trying to deploy a Next.js 14 app to Cloudflare Pages. The build fails on the 'Edge Runtime' middleware. Is Next.js 14 fully supported yet? The docs are ambiguous.",
+      "source": "Email",
+      "user_id": "dev@frontend-masters.io",
+      "region": "NL",
+      "timestamp": "2024-01-16T08:50:00Z"
+    },
+    {
+      "text": "Urgent: We have been flagged as a phishing site by Cloudflare! This is a false positive. We are a legitimate bank in Nigeria. Our customers cannot access their accounts. Please remove the warning screen immediately.",
+      "source": "Email",
+      "user_id": "security@bank-ng.com",
+      "region": "NG",
+      "timestamp": "2024-01-18T06:00:00Z"
+    },
+    {
+      "text": "I'm interested in the Workers for Platforms product. We want to let our users run their own scripts on our SaaS. Is there a sandbox environment we can test before signing an enterprise agreement?",
+      "source": "Email",
+      "user_id": "product@saas-builder.com",
+      "region": "US",
+      "timestamp": "2024-01-09T15:30:00Z"
+    },
+    {
+      "text": "Is there any plan to support TCP sockets in standard Workers? The `connect()` API seems to be limited. We are trying to build a lightweight MQTT broker on the edge.",
+      "source": "Email",
+      "user_id": "iot_dev@smart-home.net",
+      "region": "KR",
+      "timestamp": "2024-01-14T02:20:00Z"
+    },
+    {
+      "text": "My accountant is asking for the VAT number to be added to our invoices. I updated the billing profile but the past invoices didn't regenerate. Can you manually regenerate the invoice for January?",
+      "source": "Email",
+      "user_id": "finance@euro-corp.eu",
+      "region": "FR",
+      "timestamp": "2024-01-17T11:00:00Z"
+    },
+    {
+      "text": "Just wanted to say the new trace tool in the dashboard is fantastic. Helped us pinpoint a latency issue in the SSL handshake instantly. Great work team.",
+      "source": "Email",
+      "user_id": "ops@happy-customer.com",
+      "region": "US",
+      "timestamp": "2024-01-07T17:40:00Z"
+    },
+    {
+      "text": "We are getting 'Error 1000: DNS points to prohibited IP'. We are trying to point a subdomain to our internal load balancer IP (192.168.x.x) for testing, but proxied mode fails. Does Cloudflare not support private IP proxying?",
+      "source": "Email",
+      "user_id": "sysadmin@local-test.org",
+      "region": null,
+      "timestamp": "2024-01-05T12:15:00Z"
+    },
+    {
+      "text": "R2 presigned URLs seem to expire earlier than the set duration. I set it for 1 hour, but users report 403s after 45 minutes. Is there a clock skew issue on the edge nodes?",
+      "source": "Email",
+      "user_id": "backend@streaming-app.tv",
+      "region": "JP",
+      "timestamp": "2024-01-11T22:00:00Z"
+    },
+    {
+      "text": "Can I use Cloudflare Tunnel to expose a Kubernetes service without an Ingress Controller? I want to run `cloudflared` as a sidecar. Are there any examples of this?",
+      "source": "Email",
+      "user_id": "k8s_user@devops.com",
+      "region": "US",
+      "timestamp": "2024-01-15T16:30:00Z"
+    },
+    {
+      "text": "We are a non-profit organization helping refugees. Do you offer any discounts or credits for Project Galileo? We are under heavy cyber attack.",
+      "source": "Email",
+      "user_id": "director@ngo-help.org",
+      "region": "TR",
+      "timestamp": "2024-01-18T10:00:00Z"
+    },
+    {
+      "text": "The 'Purge Everything' cache button is scary. Can you add a 'Are you sure?' confirmation modal? I accidentally wiped our entire edge cache during peak hours yesterday.",
+      "source": "Email",
+      "user_id": "fat_finger@oops.com",
+      "region": "US",
+      "timestamp": "2024-01-08T14:50:00Z"
+    },
+    {
+      "text": "How do I migrate my DNSSEC keys from GoDaddy to Cloudflare without downtime? The wizard is asking me to disable DNSSEC at the registrar first, but I'm worried about validation failures during the switch.",
+      "source": "Email",
+      "user_id": "web_admin@secure-site.net",
+      "region": "AU",
+      "timestamp": "2024-01-12T05:10:00Z"
+    },
+    {
+      "text": "Anyone know how to fix 'Access to fetch at ... from origin ... has been blocked by CORS policy' when using R2? \n\nI have this in my bucket CORS rules:\n```json\n[\n  {\n    \"AllowedOrigins\": [\"http://localhost:3000\"],\n    \"AllowedMethods\": [\"GET\"]\n  }\n]\n```\nStill failing.",
+      "source": "StackOverflow",
+      "user_id": "user_77482",
+      "region": null,
+      "timestamp": "2024-01-14T08:30:00Z"
+    },
+    {
+      "text": "Cloudflare is great for DDoS but their Enterprise pricing is opaque. You have to negotiate everything. For SMBs, the Pro plan is the sweet spot, but the jump to Business ($200) is steep just for CNAME setup.",
+      "source": "G2",
+      "user_id": "reviewer_biz_owner",
+      "region": "US",
+      "timestamp": "2024-01-09T12:00:00Z"
+    },
+    {
+      "text": "Getting a `KV Error: 500` intermittently on my worker. Code:\n`await NAMESPACE.put(key, value, {expirationTtl: 60})`\nIs there a minimum TTL? Docs say 60s, but maybe it's hitting a boundary condition?",
+      "source": "Discord",
+      "user_id": "dev_dude#9921",
+      "region": null,
+      "timestamp": "2024-01-16T20:15:00Z"
+    },
+    {
+      "text": "How do I forward the real client IP to my Nginx backend? I see `CF-Connecting-IP` in the headers but my logs still show Cloudflare IPs. Do I need `real_ip_header` module?",
+      "source": "StackOverflow",
+      "user_id": "nginx_fan_55",
+      "region": "DE",
+      "timestamp": "2024-01-11T09:40:00Z"
+    },
+    {
+      "text": "Warp Client on macOS Sonoma keeps disconnecting when the laptop wakes from sleep. I have to manually toggle it off and on. Known issue?",
+      "source": "Discord",
+      "user_id": "mac_user_x#1122",
+      "region": "US",
+      "timestamp": "2024-01-18T18:00:00Z"
+    },
+    {
+      "text": "Review: 5/5 Stars. Migrated from Akamai. The dashboard is modern, the Terraform provider is robust (mostly), and the speed is unbeatable. Support is slower on lower tiers, but the community docs are excellent.",
+      "source": "G2",
+      "user_id": "ent_architect_rev",
+      "region": "GB",
+      "timestamp": "2024-01-06T15:20:00Z"
+    },
+    {
+      "text": "I'm trying to use `wrangler tail` to debug a production worker but I'm not seeing any logs. Do I need to enable something in the dashboard first?",
+      "source": "Discord",
+      "user_id": "junior_dev#4400",
+      "region": null,
+      "timestamp": "2024-01-13T11:55:00Z"
+    },
+    {
+      "text": "Is it possible to use Cloudflare Pages functions to connect to a MongoDB Atlas cluster? Concerned about connection pooling since functions are serverless.",
+      "source": "StackOverflow",
+      "user_id": "db_user_99",
+      "region": "IN",
+      "timestamp": "2024-01-17T07:30:00Z"
+    },
+    {
+      "text": "Review: 2/5 Stars. The 'Free' plan is a trap. Once you get any real traffic they force you to upgrade or they throttle you. Support is non-existent for free users.",
+      "source": "G2",
+      "user_id": "angry_blogger",
+      "region": "US",
+      "timestamp": "2024-01-05T16:00:00Z"
+    },
+    {
+      "text": "Does D1 support foreign key constraints yet? I'm getting a syntax error when trying to run my migration SQL.",
+      "source": "Discord",
+      "user_id": "sql_master#8811",
+      "region": null,
+      "timestamp": "2024-01-15T19:10:00Z"
+    }
+  ]
+  
+  
+  
