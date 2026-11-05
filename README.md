@@ -2,19 +2,29 @@
 
 A copy of the [Cloudflare Voice feedback dashboard](https://github.com/apurva-mali/cloudflare-dashboard). This version runs on **real public feedback** instead of synthetic data, from two sources:
 
-- **GitHub Issues** from Cloudflare's open-source repos (by default [`cloudflare/workers-sdk`](https://github.com/cloudflare/workers-sdk)). This brings structured bug reports and feature requests.
+- **GitHub Issues** from Cloudflare's open-source repos: [`workers-sdk`](https://github.com/cloudflare/workers-sdk), [`workerd`](https://github.com/cloudflare/workerd), [`cloudflare-docs`](https://github.com/cloudflare/cloudflare-docs) and [`agents`](https://github.com/cloudflare/agents). This brings structured bug reports, feature requests and docs gaps.
 - **Hacker News** stories and comments that discuss Cloudflare products. This brings opinions, including praise, which GitHub issues almost never contain.
 
 ## The dashboard
 
 | Tab | What it's for |
 |---|---|
-| **Overview** | Sentiment index and balance bar (click a segment to read those items), key numbers, "Needs attention" and "What people like" lists, feedback over time, sentiment by product |
-| **Feedback** | The full log. Sort it, page through it, filter it, search by exact words or by *similar meaning* (Vectorize). Click a row to open the detail panel with the AI analysis, the original text, a link to the source, and actions |
-| **Products** | Each product's volume, sentiment balance, index, urgent count, open tickets, and its top concern and top praise |
-| **Tickets** | Support tickets raised from feedback (CV-1, CV-2, …). Change priority, assignee and status inline. Resolving a ticket resolves its feedback |
+| **Overview** | Sentiment index and balance bar (click a segment to read those items), key numbers, "Needs attention" and "What people like", feedback over time, sentiment by product, most-mentioned themes |
+| **Inbox** | Everything nobody has looked at yet, most urgent first. List on the left, full detail and actions on the right, keyboard shortcuts (`j`/`k` move, `r` reviewed, `s` star, `t` ticket, `x` resolve, `d` dismiss, `h` highlight, `o` open, `?` help). Built to clear a day's feedback in a few minutes |
+| **Feedback** | The full log: sort, page, filter, star, search by exact words or by *similar meaning* (Vectorize). Click a row for the detail panel |
+| **Themes** | Feedback about the same thing, grouped automatically (e.g. three reports of the same R2 ETag bug). Raise one ticket for a whole theme |
+| **Highlights** | A library of praise saved with a purpose: *Customer story*, *Launch quote*, *Team shout-out*, *Competitive win*. Copy a quote with attribution and link in one click |
+| **Products** | Each product's volume, sentiment balance, index, urgent count, open tickets, top concern and top praise |
+| **Digest** | A weekly summary per product, written every Monday: what people talked about, change from the week before, themes, urgent items, praise. "Copy as text" for Slack or email |
+| **Tickets** | Support tickets (CV-1, CV-2, …) with inline priority, assignee and status. Resolving a ticket resolves its feedback, or its whole theme. "Author not told" lists resolved tickets nobody has replied about yet |
 
-The time range and filters at the top apply to Overview, Feedback and Products. Tables choose their columns by screen width, so nothing scrolls sideways, down to phone size.
+**Actions fit the feedback.** Problems (negative and neutral) get *Raise ticket*, *Resolve* and *Dismiss* (with a reason: duplicate, not actionable, off-topic, spam). Praise gets *Save to highlights* instead, because there's nothing to resolve. Anything can be *starred* to come back to, *marked reviewed* to leave the inbox, and given **team notes**.
+
+**Closing the loop.** When a GitHub issue is closed upstream but still open here, the detail panel says so and offers *Mark resolved*. Once something is resolved, it prompts you to reply to the author on GitHub or Hacker News and to mark it replied, and the Tickets tab tracks which resolved tickets still need a reply.
+
+**Shareable views.** The URL always holds the tab, time range, filters, search and open item, so *Copy link* (in the filter bar, or on any item) sends someone exactly what you're looking at.
+
+The time range and filters apply to every tab except Digest and Tickets. Tables choose their columns by screen width, so nothing scrolls sideways, down to phone size.
 
 ## Why GitHub Issues first
 
@@ -85,13 +95,20 @@ Embeddings, D1 writes and Vectorize writes are batched. Each run uses roughly on
 | GET | `/all` | none | All feedback rows (labels returned as an array) |
 | GET | `/search?q=` | none | Semantic search via Vectorize |
 | GET | `/sync/status` | none | Cursor and last run result per stream |
-| POST | `/sync/github?max=N` | `ADMIN_TOKEN` | Run the GitHub sync now (optionally override the per-run cap) |
+| POST | `/sync/github?max=N&since_days=N` | `ADMIN_TOKEN` | Run the GitHub sync now. `max` overrides the per-repo cap; `since_days` re-scans further back once (nothing is duplicated or re-analyzed) |
 | POST | `/sync/hackernews?max=N` | `ADMIN_TOKEN` | Run the Hacker News sync now |
-| POST | `/sync/all?max=N` | `ADMIN_TOKEN` | Run every source (this is what the hourly cron does) |
+| POST | `/sync/themes?max=N` | `ADMIN_TOKEN` | Group up to N not-yet-grouped items into themes |
+| POST | `/sync/all?max=N` | `ADMIN_TOKEN` | Run every source, then themes (this is what the hourly cron does) |
 | POST | `/ingest` | `ADMIN_TOKEN` | Ingest one manual item (same body as the original project) |
-| PATCH | `/feedback/:id` | none | `{"feedback_status": "Open" \| "Ticket Raised" \| "Resolved"}` |
+| PATCH | `/feedback/:id` | none | Any of `feedback_status` (`Open` \| `Ticket Raised` \| `Resolved` \| `Dismissed` + `dismissed_reason`), `starred`, `reviewed`, `highlight_tags` (string array), `responded` |
+| POST | `/feedback/bulk` | none | `{ids: [...≤200], changes: {...}}`, e.g. mark a backlog reviewed |
+| GET / POST | `/feedback/:id/notes` | none | List or add team notes (`{body, author?}`) |
+| DELETE | `/notes/:id` | none | Delete a note |
+| GET | `/themes` | none | Themes with at least two items, with ticket status |
+| GET | `/digests[?week=YYYY-MM-DD]` | none | One weekly digest plus the list of available weeks |
+| POST | `/digests/generate` | none | Build the current week's digest now (rebuilt at most every 10 minutes) |
 | GET | `/tickets` | none | All tickets, with source, link and product from the linked feedback |
-| POST | `/tickets` | none | `{feedback_id, title, priority: "P0"–"P3", team?, assignee?, description?}`. One ticket per feedback item (409 if one exists) |
+| POST | `/tickets` | none | `{feedback_id, title, priority: "P0"–"P3", team?, assignee?, description?, theme_id?}`. One ticket per feedback item and per theme (409 if one exists) |
 | PATCH | `/tickets/:id` | none | Any of `status` (`Open` \| `In Progress` \| `Resolved`), `priority`, `assignee`, `team`, `title`, `description` |
 
 `ADMIN_TOKEN` is sent as `Authorization: Bearer <token>`. If the secret isn't set (typical for local dev), these routes are open.
@@ -126,16 +143,21 @@ curl -X POST "https://cloudflare-github-feedback.<your-subdomain>.workers.dev/sy
 
 ### Upgrading an existing deployment
 
-If you deployed before Hacker News was added:
-
 ```bash
 git pull
-npm run db:migrate:remote           # adds skipped_items, re-buckets sentiment on existing rows
-npm run db:migrate:tickets:remote   # adds the tickets table
+npm run db:migrate      # applies any migrations/ not yet applied, and records them
 npm run build && npm run deploy
 ```
 
-Both migrations are safe to run more than once.
+`db:migrate` uses Wrangler's tracked migrations, so each file runs exactly once. On a database where 0001 and 0002 were applied by hand earlier, they run once more harmlessly (they only create missing tables).
+
+To pull in more history after adding repos or raising the lookback:
+
+```bash
+for i in 1 2 3 4 5; do curl -s -X POST "$APP_URL/sync/github?max=40" -H "Authorization: Bearer $ADMIN_TOKEN"; echo; done
+curl -s -X POST "$APP_URL/sync/github?since_days=60&max=40" -H "Authorization: Bearer $ADMIN_TOKEN"   # one-off deeper look for repos that were already syncing
+for i in 1 2 3 4; do curl -s -X POST "$APP_URL/sync/themes" -H "Authorization: Bearer $ADMIN_TOKEN"; echo; done   # group existing items
+```
 
 ### Local development
 
@@ -165,18 +187,25 @@ The tests run in Node against the real `schema.sql`. D1, Workers AI, Vectorize a
 - HN HTML cleanup, keyword and AI relevance filtering, and recovery when the HN API is down
 - the sentiment buckets
 - admin auth on write routes and persisted ticket status
+- triage actions (star, reviewed, dismiss with reason, highlights, replied), bulk updates and notes
+- themes: grouping within a batch and through Vectorize, titles, theme tickets that never touch dismissed items, and that HN thread titles or issue templates can't create false themes
+- weekly digests: week boundaries, counts and changes, urgent and praise picks, cron routing and regeneration throttling
+- per-repo GitHub budgets, docs-repo defaults and duplicate-free deeper backfills
+- that applying `migrations/` to the first deployed schema gives exactly `schema.sql`
 
 ## Configuration (`wrangler.jsonc` → `vars`)
 
 | Var | Default | Notes |
 |---|---|---|
-| `GITHUB_REPOS` | `cloudflare/workers-sdk` | Comma-separated. Good additions: `cloudflare/workerd`, `cloudflare/cloudflare-docs`, `cloudflare/agents` |
-| `GITHUB_BACKFILL_DAYS` | `14` | First run only |
-| `GITHUB_MAX_NEW_PER_RUN` | `15` | Upper bound on LLM calls per run |
+| `GITHUB_REPOS` | `workers-sdk, workerd, cloudflare-docs, agents` | Comma-separated `owner/repo` |
+| `GITHUB_BACKFILL_DAYS` | `60` | How far back a repo's *first* sync looks; repos already syncing keep their place (use `since_days` for a one-off deeper look) |
+| `GITHUB_MAX_NEW_PER_REPO` | `15` | AI calls per repo per run, so a busy repo can't starve the others |
 | `GITHUB_INCLUDE_STAFF` | `false` | Include issues opened by Cloudflare org members |
 | `HN_QUERIES` | 8 product queries | Comma-separated. Stories and comments are both searched |
 | `HN_BACKFILL_DAYS` | `7` | First run only |
 | `HN_MAX_NEW_PER_RUN` | `15` | Upper bound on AI calls per run, including items the AI rejects |
+| `THEME_SIMILARITY` | `0.85` | How alike two items must be (cosine) to share a theme. Raise it if unrelated items get grouped; lower it if obvious duplicates stay apart |
+| `THEME_BATCH` | `40` | Items grouped per run (existing items are backfilled in batches) |
 | `AI_MODEL` | `@cf/zai-org/glm-4.7-flash` | The original's `@cf/meta/llama-3-8b-instruct` was [deprecated on Workers AI on 2026-05-30](https://developers.cloudflare.com/changelog/post/2026-05-08-planned-model-deprecations/) |
 
 Changes from the original project:
@@ -192,5 +221,7 @@ Changes from the original project:
 - **GitHub feedback still skews negative**, since issue trackers are mostly bug reports. Filter by source to compare like with like.
 - **HN pagination is capped** at 600 results per query per run. That's plenty for these queries, but a very broad query (for example just `cloudflare`) could miss items in a busy week.
 - **No dashboard auth.** Anyone with the URL can view the dashboard and change statuses. Put it behind Cloudflare Access before sharing it.
+- **Theme quality depends on `THEME_SIMILARITY`.** 0.85 is a starting point for the BGE embeddings; check the Themes tab after a few days and adjust. Themes never merge with each other, and an item stays in the theme it first joined.
+- **Workers AI usage** grows with the extra repos: up to 15 analyses per repo per hour while catching up, then only what's new. That's well within the free daily allowance for normal volumes, but check your usage after the first day.
 - **Tickets live in D1 only.** A natural next step is also pushing them to GitHub Issues or Jira and storing the external link on the ticket.
 - **More sources.** `src/pipeline.js` doesn't depend on the source, so Stack Overflow or the Cloudflare Community forum would each be another fetcher module like `src/hackernews.js`, registered in `SYNCS` in `src/index.js`.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search, Sparkles, X } from 'lucide-react';
-import { EmptyState, SentimentTag, SourceTag, StatusTag, UrgencyTag } from './bits.jsx';
+import { EmptyState, SentimentTag, SourceTag, StarButton, StatusTag, UrgencyTag } from './bits.jsx';
 import { URGENCY_ORDER, timeAgo, fullDate } from '../lib/format.js';
 import { api } from '../lib/api.js';
 import { useBreakpoint } from '../lib/useBreakpoint.js';
@@ -31,8 +31,7 @@ function SortHeader({ id, label, sort, setSort, className }) {
   );
 }
 
-export default function FeedbackView({ items, selectedId, onOpen }) {
-  const [query, setQuery] = useState('');
+export default function FeedbackView({ items, selectedId, onOpen, query, setQuery, onToggleStar }) {
   const [mode, setMode] = useState('keyword'); // keyword | meaning
   const [semantic, setSemantic] = useState(null); // { query, ids: Map<id, score> } | { error }
   const [searching, setSearching] = useState(false);
@@ -42,7 +41,7 @@ export default function FeedbackView({ items, selectedId, onOpen }) {
   const wide = bp === 'lg';
   const showProduct = bp !== 'sm';
 
-  useEffect(() => setPage(0), [items, query, mode, semantic, sort]);
+  useEffect(() => setPage(0), [items.length, query, mode, semantic, sort]);
 
   const runSemantic = async () => {
     const q = query.trim();
@@ -179,7 +178,11 @@ export default function FeedbackView({ items, selectedId, onOpen }) {
                       {timeAgo(item.timestamp)}
                     </td>
                     <td className="cell-feedback">
-                      <span className="fb-title">{item.headline}</span>
+                      <span className="fb-title-row">
+                        <StarButton starred={item.starred} onToggle={() => onToggleStar(item)} size={14} className="inline" />
+                        <span className="fb-title">{item.headline}</span>
+                        {item.notesCount > 0 && <span className="note-count" title={`${item.notesCount} team notes`}>{item.notesCount}</span>}
+                      </span>
                       <span className="fb-sub">
                         <SourceTag source={item.source} compact={bp === 'sm'} />
                         {!wide && item.urgency === 'High' && <UrgencyTag urgency="High" />}

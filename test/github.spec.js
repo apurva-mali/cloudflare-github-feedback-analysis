@@ -197,3 +197,41 @@ describe('HTTP routes', () => {
 		expect(status.streams[0]).toMatchObject({ stream: 'github:cloudflare/workers-sdk' });
 	});
 });
+
+describe('more repos and deeper backfill', () => {
+	const realFetch = globalThis.fetch;
+	afterEach(() => {
+		globalThis.fetch = realFetch;
+	});
+
+	it('gives each repo its own budget, marks docs issues as Docs, and since_days never duplicates', async () => {
+		const now = Date.now();
+		const iso = (daysAgo) => new Date(now - daysAgo * 86400000).toISOString();
+		const sdk = [1, 2, 3, 4].map((n) => ghIssue(n, { updated_at: iso(2), created_at: iso(2) }));
+		const docs = [10, 11].map((n) => ghIssue(n, { updated_at: iso(3), created_at: iso(3), html_url: `https://github.com/cloudflare/cloudflare-docs/issues/${n}` }));
+		const oldSdk = ghIssue(99, { updated_at: iso(40), created_at: iso(40) }); // older than the first backfill window
+		mockGitHubFetch({ 'cloudflare/workers-sdk': [...sdk, oldSdk], 'cloudflare/cloudflare-docs': docs });
+		const env = {
+			DB: createFakeD1(),
+			AI: createFakeAI(),
+			VECTOR_INDEX: createFakeVectorize(),
+			GITHUB_REPOS: 'cloudflare/workers-sdk,cloudflare/cloudflare-docs',
+			GITHUB_MAX_NEW_PER_REPO: '3',
+			GITHUB_BACKFILL_DAYS: '14',
+		};
+
+		const run1 = await syncGitHub(env);
+		expect(run1.results.map((r) => r.created)).toEqual([3, 2]); // docs not starved by sdk
+		const docsRow = env.DB._db.prepare("SELECT feedback_type FROM feedback WHERE external_id = 'gh:cloudflare/cloudflare-docs#10'").get();
+		expect(docsRow.feedback_type).toBe('Docs');
+
+		await syncGitHub(env); // picks up sdk #4
+		expect(env.DB._db.prepare('SELECT COUNT(*) AS n FROM feedback').get().n).toBe(6);
+
+		const aiBefore = env.AI.calls.text;
+		const deep = await syncGitHub(env, { sinceDays: 60 });
+		expect(deep.results[0]).toMatchObject({ created: 1 }); // only the 40-day-old issue is new
+		expect(env.AI.calls.text).toBe(aiBefore + 1);
+		expect(env.DB._db.prepare('SELECT COUNT(*) AS n FROM feedback').get().n).toBe(7);
+	});
+});

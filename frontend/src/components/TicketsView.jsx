@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Layers, MessageSquareReply } from 'lucide-react';
 import { EmptyState, SourceTag } from './bits.jsx';
 import { PRIORITIES, TICKET_STATUSES, fullDate, ticketKey, timeAgo } from '../lib/format.js';
 import { useBreakpoint } from '../lib/useBreakpoint.js';
@@ -23,6 +24,9 @@ function AssigneeInput({ ticket, onSave }) {
   );
 }
 
+/** Resolved, the reporter can be replied to, and nobody has yet. */
+const needsReplyTicket = (t) => t.status === 'Resolved' && t.source_url && !t.reporter_responded_at;
+
 export default function TicketsView({ tickets, unavailable, focusId, onUpdate, onOpenFeedback }) {
   const bp = useBreakpoint();
   const wide = bp === 'lg';
@@ -32,11 +36,12 @@ export default function TicketsView({ tickets, unavailable, focusId, onUpdate, o
   const [status, setStatus] = useState(() => (tickets.find((t) => t.id === focusId)?.status === 'Resolved' ? 'All' : 'Active'));
 
   const counts = useMemo(() => {
-    const c = { Active: 0, All: tickets.length };
+    const c = { Active: 0, All: tickets.length, Reply: 0 };
     for (const s of TICKET_STATUSES) c[s] = 0;
     for (const t of tickets) {
       c[t.status] = (c[t.status] || 0) + 1;
       if (t.status !== 'Resolved') c.Active++;
+      if (needsReplyTicket(t)) c.Reply++;
     }
     return c;
   }, [tickets]);
@@ -44,6 +49,7 @@ export default function TicketsView({ tickets, unavailable, focusId, onUpdate, o
   const rows = useMemo(() => {
     if (status === 'All') return tickets;
     if (status === 'Active') return tickets.filter((t) => t.status !== 'Resolved');
+    if (status === 'Reply') return tickets.filter(needsReplyTicket);
     return tickets.filter((t) => t.status === status);
   }, [tickets, status]);
 
@@ -55,7 +61,7 @@ export default function TicketsView({ tickets, unavailable, focusId, onUpdate, o
   if (unavailable) {
     return (
       <EmptyState title="Tickets aren't set up on this database yet">
-        Run <code>npm run db:migrate:tickets:remote</code> in the project folder, then refresh this page.
+        Run <code>npm run db:migrate</code> in the project folder, then refresh this page.
       </EmptyState>
     );
   }
@@ -64,9 +70,9 @@ export default function TicketsView({ tickets, unavailable, focusId, onUpdate, o
     <div className="tickets-view">
       <div className="toolbar">
         <div className="segmented" role="group" aria-label="Ticket status">
-          {['Active', ...TICKET_STATUSES, 'All'].map((s) => (
+          {['Active', ...TICKET_STATUSES, 'Reply', 'All'].map((s) => (
             <button key={s} type="button" aria-pressed={status === s} onClick={() => setStatus(s)}>
-              {s === 'Active' ? 'Not resolved' : s} <span className="seg-count">{counts[s] || 0}</span>
+              {s === 'Active' ? 'Not resolved' : s === 'Reply' ? 'Author not told' : s} <span className="seg-count">{counts[s] || 0}</span>
             </button>
           ))}
         </div>
@@ -108,8 +114,19 @@ export default function TicketsView({ tickets, unavailable, focusId, onUpdate, o
                       <span className="fb-title">{t.title}</span>
                     </button>
                     <span className="fb-sub">
-                      {t.source && <SourceTag source={t.source} />}
+                      {t.theme_id ? (
+                        <span className="ticket-theme">
+                          <Layers size={13} aria-hidden="true" /> Theme: {t.theme_title || 'related feedback'} ({t.theme_size})
+                        </span>
+                      ) : (
+                        t.source && <SourceTag source={t.source} />
+                      )}
                       <span title={fullDate(t.created_at)}>Raised {timeAgo(t.created_at)}</span>
+                      {needsReplyTicket(t) && (
+                        <button type="button" className="mini-flag as-btn" onClick={() => onOpenFeedback(t.feedback_id)}>
+                          <MessageSquareReply size={12} aria-hidden="true" /> Tell the author
+                        </button>
+                      )}
                     </span>
                   </td>
                   {showTeam && <td>{t.team || <span className="muted">None</span>}</td>}

@@ -13,6 +13,19 @@ export const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
 
 const MAX_LLM_INPUT_CHARS = 2500;
 
+/**
+ * The text we embed for search and themes. It must describe *what the feedback
+ * is about*, so it leaves out what all items share:
+ *   - GitHub: title + AI summary (bodies are mostly the same issue template)
+ *   - Hacker News replies: summary + the comment (the title is just the thread)
+ */
+export function embeddingTextFor(r) {
+	const ownTitle = r.title && !r.title.startsWith('Re: ') ? r.title : '';
+	const isGitHub = r.source === 'GitHub' || Boolean(r.repo);
+	const parts = isGitHub ? [ownTitle, r.summary] : [ownTitle, r.summary, (r.original_text || '').slice(0, 600)];
+	return parts.filter(Boolean).join('\n').slice(0, 1200) || (r.original_text || '').slice(0, 600) || '(empty)';
+}
+
 const SYSTEM_PROMPT = `You are a Product Feedback AI for Cloudflare's developer platform.
 Analyze the feedback and return ONLY a JSON object with these keys:
 
@@ -172,7 +185,7 @@ export async function storeRecords(env, records) {
 	await env.DB.batch(records.map((r) => stmt.bind(...COLUMNS.map((c) => r[c]))));
 
 	try {
-		const texts = records.map((r) => (r.title ? `${r.title}\n${r.original_text}` : r.original_text).slice(0, 2000));
+		const texts = records.map(embeddingTextFor);
 		const emb = await env.AI.run(EMBEDDING_MODEL, { text: texts });
 		await env.VECTOR_INDEX.upsert(
 			records.map((r, i) => ({

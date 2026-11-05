@@ -146,7 +146,41 @@ export function normalizeFeedback(row) {
     ticketId: row.ticket_id ?? null,
     ticketStatus: str(row.ticket_status) || null,
     ticketPriority: str(row.ticket_priority) || null,
+    ticketViaTheme: Boolean(row.ticket_via_theme),
+    // Triage
+    starred: Boolean(Number(row.starred)),
+    reviewedAt: str(row.reviewed_at) || null,
+    dismissedReason: str(row.dismissed_reason) || null,
+    highlightTags: parseLabels(row.highlight_tags),
+    respondedAt: str(row.responded_at) || null,
+    themeId: row.theme_id ?? null,
+    notesCount: Number(row.notes_count) || 0,
   };
+}
+
+/** Praise gets "save" actions; everything else gets "fix" actions. */
+export const isPraise = (item) => item.sentiment === 'positive';
+
+/** Still waiting for someone to look at it. */
+export const inInbox = (item) => !item.reviewedAt && item.status === 'Open';
+
+/** GitHub closed the issue, but it's still open on our side. */
+export const closedUpstream = (item) => item.upstreamState === 'closed' && (item.status === 'Open' || item.status === 'Ticket Raised');
+
+/** Resolved, has somewhere to reply, and nobody has told the author yet. */
+export const needsReply = (item) => item.status === 'Resolved' && Boolean(item.url) && !item.respondedAt;
+
+export const HIGHLIGHT_TAGS = ['Customer story', 'Launch quote', 'Team shout-out', 'Competitive win'];
+export const DISMISS_REASONS = ['Duplicate', 'Not actionable', 'Off-topic', 'Spam', 'Other'];
+
+export const STATUS_FILTERS = ['Open', 'Ticket Raised', 'Resolved', 'Dismissed', 'Starred', 'Closed on GitHub', 'Needs reply'];
+
+export function matchesStatus(item, status) {
+  if (!status) return true;
+  if (status === 'Starred') return item.starred;
+  if (status === 'Closed on GitHub') return closedUpstream(item);
+  if (status === 'Needs reply') return needsReply(item);
+  return item.status === status;
 }
 
 export const RANGES = [

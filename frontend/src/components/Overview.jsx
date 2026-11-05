@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { BalanceBar, EmptyState, SentimentTag, SourceTag, UrgencyTag } from './bits.jsx';
 import VolumeChart from './VolumeChart.jsx';
-import { SENTIMENTS, URGENCY_ORDER, countBySentiment, plural, sentimentIndex, signed, timeAgo } from '../lib/format.js';
+import { Layers } from 'lucide-react';
+import { SENTIMENTS, URGENCY_ORDER, countBySentiment, inInbox, plural, sentimentIndex, signed, timeAgo } from '../lib/format.js';
 
 function describeIndex(index) {
   if (index >= 30) return 'People are mostly happy.';
@@ -35,7 +36,7 @@ function ItemList({ items, onOpen, empty }) {
   );
 }
 
-export default function Overview({ items, allItems, tickets, rangeDays, onOpen, onDrill }) {
+export default function Overview({ items, allItems, tickets, themes, rangeDays, onOpen, onDrill, onOpenTheme }) {
   const counts = countBySentiment(items);
   const index = sentimentIndex(items);
 
@@ -78,6 +79,17 @@ export default function Overview({ items, allItems, tickets, rangeDays, onOpen, 
 
   const highOpen = items.filter((i) => i.urgency === 'High' && i.status === 'Open').length;
   const openTickets = tickets.filter((t) => t.status !== 'Resolved').length;
+  const inboxCount = items.filter(inInbox).length;
+
+  const topThemes = useMemo(() => {
+    const byTheme = new Map();
+    for (const i of items) if (i.themeId) byTheme.set(i.themeId, [...(byTheme.get(i.themeId) || []), i]);
+    return themes
+      .filter((t) => byTheme.get(t.id)?.length >= 2)
+      .map((t) => ({ ...t, members: byTheme.get(t.id) }))
+      .sort((a, b) => b.members.length - a.members.length)
+      .slice(0, 5);
+  }, [items, themes]);
   const worst = [...products].filter((p) => p.list.length >= 3).sort((a, b) => a.index - b.index)[0];
 
   if (!allItems.length) {
@@ -128,10 +140,12 @@ export default function Overview({ items, allItems, tickets, rangeDays, onOpen, 
           <span className="stat-label">high-urgency, not yet actioned</span>
           <span className="stat-sub">Blocking bugs, regressions, heavily upvoted</span>
         </button>
-        <button type="button" className="stat stat-link" onClick={() => onDrill({ tab: 'tickets' })}>
-          <span className="stat-value">{openTickets}</span>
-          <span className="stat-label">open tickets</span>
-          <span className="stat-sub">{tickets.length - openTickets} resolved</span>
+        <button type="button" className="stat stat-link" onClick={() => onDrill({ tab: 'inbox' })}>
+          <span className="stat-value">{inboxCount}</span>
+          <span className="stat-label">waiting in the inbox</span>
+          <span className="stat-sub">
+            {openTickets} open {openTickets === 1 ? 'ticket' : 'tickets'}, {tickets.length - openTickets} resolved
+          </span>
         </button>
         {worst ? (
           <button type="button" className="stat stat-link" onClick={() => onDrill({ product: worst.name })}>
@@ -200,6 +214,36 @@ export default function Overview({ items, allItems, tickets, rangeDays, onOpen, 
           </ul>
         </section>
       </div>
+
+      {topThemes.length > 0 && (
+        <section className="panel" aria-labelledby="themes-heading">
+          <header className="panel-head">
+            <h3 id="themes-heading">Most mentioned themes</h3>
+            <button type="button" className="link-btn muted small" onClick={() => onDrill({ tab: 'themes' })}>
+              All themes
+            </button>
+          </header>
+          <ul className="item-list">
+            {topThemes.map((t) => (
+              <li key={t.id}>
+                <button type="button" className="item-row" onClick={() => onOpenTheme(t.id)}>
+                  <Layers size={16} className="muted" aria-hidden="true" />
+                  <span className="item-main">
+                    <span className="item-title">{t.title || 'Related feedback'}</span>
+                    <span className="item-meta">
+                      <span>{t.product}</span>
+                      <span>{plural(t.members.length, 'mention')}</span>
+                    </span>
+                  </span>
+                  <span className="item-side theme-side">
+                    <BalanceBar items={t.members} />
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

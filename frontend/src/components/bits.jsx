@@ -1,4 +1,5 @@
-import { Github, Newspaper, PenLine, TriangleAlert } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, ChevronDown, Github, Newspaper, PenLine, Star, TriangleAlert } from 'lucide-react';
 import { SENTIMENTS, countBySentiment, pct, ticketKey } from '../lib/format.js';
 
 export function SourceTag({ source, compact = false }) {
@@ -39,6 +40,7 @@ export function StatusTag({ item }) {
       </span>
     );
   }
+  if (item.status === 'Dismissed') return <span className="status-tag dismissed" title={item.dismissedReason || ''}>Dismissed</span>;
   return <span className={`status-tag ${item.status === 'Resolved' ? 'done' : ''}`}>{item.status}</span>;
 }
 
@@ -87,5 +89,95 @@ export function EmptyState({ title, children }) {
       <p className="empty-title">{title}</p>
       {children && <p className="empty-body">{children}</p>}
     </div>
+  );
+}
+
+/**
+ * Small dropdown: a button that opens a list of choices.
+ * items: [{ key, label, hint?, checked?, onSelect }]. Stays open when `keepOpen`.
+ */
+export function Menu({ label, icon: Icon, items, className = '', align = 'start', keepOpen = false, title, open: openProp, onOpenChange }) {
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (v) => (onOpenChange ? onOpenChange(v) : setOpenState(v));
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  });  
+
+  return (
+    <div className={`menu ${className}`} ref={ref}>
+      <button type="button" className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} title={title}>
+        {Icon && <Icon size={16} aria-hidden="true" />}
+        {label}
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className={`menu-pop ${align}`} role="menu">
+          {items.map((it) => (
+            <button
+              key={it.key || it.label}
+              type="button"
+              role={it.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+              aria-checked={it.checked}
+              className="menu-item"
+              onClick={() => {
+                it.onSelect();
+                if (!keepOpen) setOpen(false);
+              }}
+            >
+              {it.checked !== undefined && <span className={`check ${it.checked ? 'on' : ''}`} aria-hidden="true">{it.checked && <Check size={12} />}</span>}
+              <span className="menu-label">{it.label}</span>
+              {it.hint && <span className="menu-hint">{it.hint}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function StarButton({ starred, onToggle, size = 16, className = '' }) {
+  return (
+    <button
+      type="button"
+      className={`star-btn ${starred ? 'on' : ''} ${className}`}
+      aria-pressed={starred}
+      aria-label={starred ? 'Remove star' : 'Star to come back to later'}
+      title={starred ? 'Starred' : 'Star to come back to later'}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+    >
+      <Star size={size} aria-hidden="true" />
+    </button>
+  );
+}
+
+export function TagChips({ tags }) {
+  if (!tags?.length) return null;
+  return (
+    <span className="tag-chips">
+      {tags.map((t) => (
+        <span key={t} className="hl-tag">
+          {t}
+        </span>
+      ))}
+    </span>
   );
 }

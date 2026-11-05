@@ -2,32 +2,43 @@
  * Cloudflare Voice — real feedback edition (GitHub Issues + Hacker News).
  *
  * Routes
- *   GET   /all                 all feedback rows (dashboard)
- *   GET   /search?q=           semantic search via Vectorize
- *   GET   /sync/status         last sync result per stream
- *   POST  /sync/github         run a GitHub sync now           (admin)
- *   POST  /sync/hackernews     run a Hacker News sync now      (admin)
- *   POST  /sync/all            run every source now            (admin)
- *   POST  /ingest              ingest one manual feedback item (admin)
- *   PATCH /feedback/:id        set PM status: Open | Ticket Raised | Resolved
- *   GET   /tickets             all support tickets
- *   POST  /tickets             raise a ticket from a feedback item
- *   PATCH /tickets/:id         update status / priority / assignee / team
+ *   GET    /all                     all feedback rows (dashboard)
+ *   GET    /search?q=               semantic search via Vectorize
+ *   GET    /themes                  groups of similar feedback
+ *   GET    /digests[?week=]         weekly digest + available weeks
+ *   POST   /digests/generate        build this week's digest now (throttled)
+ *   PATCH  /feedback/:id            status, dismiss, star, reviewed, highlight tags, replied
+ *   POST   /feedback/bulk           same changes for many ids
+ *   GET    /feedback/:id/notes      internal notes
+ *   POST   /feedback/:id/notes      add a note
+ *   DELETE /notes/:id               delete a note
+ *   GET    /tickets                 all support tickets
+ *   POST   /tickets                 raise a ticket (optionally for a whole theme)
+ *   PATCH  /tickets/:id             update status / priority / assignee / team
+ *   GET    /sync/status             last sync result per stream
+ *   POST   /sync/:source            github | hackernews | themes | all          (admin)
+ *                                   ?max=N  per-run cap, ?since_days=N  GitHub one-off backfill
+ *   POST   /ingest                  ingest one manual feedback item             (admin)
  *
- * Cron: the `scheduled` handler runs every source (see triggers in wrangler.jsonc).
+ * Cron: hourly → every source then themes; Mondays → last week's digest.
  */
 
 import { CORS_HEADERS, json, isAuthorized } from './http.js';
 import { analyzeFeedback, buildRecord, storeRecords, EMBEDDING_MODEL } from './pipeline.js';
 import { syncGitHub } from './github.js';
 import { syncHackerNews } from './hackernews.js';
+import { syncThemes, listThemes } from './themes.js';
+import { getDigests, handleGenerate, weeklyDigest } from './digest.js';
 import { listTickets, createTicket, updateTicket } from './tickets.js';
+import { updateFeedback, bulkUpdateFeedback, listNotes, addNote, deleteNote } from './feedback.js';
 
-const PM_STATUSES = new Set(['Open', 'Ticket Raised', 'Resolved']);
+export const DIGEST_CRON = '7 13 * * 1';
 
+// Order matters: themes runs last so it groups what the sources just added.
 const SYNCS = {
 	github: syncGitHub,
 	hackernews: syncHackerNews,
+	themes: syncThemes,
 };
 
 /** Run sources one after another; one failing never blocks the others. */
@@ -35,7 +46,7 @@ async function syncAll(env, opts = {}) {
 	const out = {};
 	for (const [name, run] of Object.entries(SYNCS)) {
 		try {
-			out[name] = await run(env, opts);
+			out[name] = await run(env, name === 'themes' ? {} : opts);
 		} catch (err) {
 			console.error(`${name} sync failed:`, err);
 			out[name] = { error: err?.message || String(err) };
@@ -81,20 +92,35 @@ async function handleIngest(request, env) {
 	);
 }
 
+const ALL_QUERIES = [
+	// Current schema: ticket on the item itself or on its theme, plus note count.
+	`SELECT f.*,
+	        COALESCE(td.id, tt.id) AS ticket_id, COALESCE(td.status, tt.status) AS ticket_status,
+	        COALESCE(td.priority, tt.priority) AS ticket_priority, (td.id IS NULL AND tt.id IS NOT NULL) AS ticket_via_theme,
+	        (SELECT COUNT(*) FROM feedback_notes n WHERE n.feedback_id = f.id) AS notes_count
+	 FROM feedback f
+	 LEFT JOIN tickets td ON td.feedback_id = f.id
+	 LEFT JOIN tickets tt ON f.theme_id IS NOT NULL AND tt.theme_id = f.theme_id AND tt.feedback_id != f.id
+	 ORDER BY f.feedback_timestamp DESC`,
+	// Before migration 0003.
+	`SELECT f.*, t.id AS ticket_id, t.status AS ticket_status, t.priority AS ticket_priority
+	 FROM feedback f LEFT JOIN tickets t ON t.feedback_id = f.id
+	 ORDER BY f.feedback_timestamp DESC`,
+	// Before migration 0002.
+	'SELECT * FROM feedback ORDER BY feedback_timestamp DESC',
+];
+
 async function handleAll(env) {
-	let results;
-	try {
-		({ results } = await env.DB.prepare(
-			`SELECT f.*, t.id AS ticket_id, t.status AS ticket_status, t.priority AS ticket_priority
-			 FROM feedback f LEFT JOIN tickets t ON t.feedback_id = f.id
-			 ORDER BY f.feedback_timestamp DESC`
-		).all());
-	} catch (err) {
-		// Database not migrated for tickets yet: still serve the feedback.
-		if (!/no such table: tickets/.test(String(err?.message))) throw err;
-		({ results } = await env.DB.prepare('SELECT * FROM feedback ORDER BY feedback_timestamp DESC').all());
+	for (const sql of ALL_QUERIES) {
+		try {
+			const { results } = await env.DB.prepare(sql).all();
+			return json({ results: results.map(serializeRow), total: results.length });
+		} catch (err) {
+			// Older database: fall back to the next query instead of failing.
+			if (!/no such (table|column)/.test(String(err?.message))) throw err;
+		}
 	}
-	return json({ results: results.map(serializeRow), total: results.length });
+	return json({ results: [], total: 0 });
 }
 
 async function handleSearch(url, env) {
@@ -121,16 +147,6 @@ async function handleSearch(url, env) {
 	return json({ query, results: scored });
 }
 
-async function handleStatusUpdate(id, request, env) {
-	const body = await request.json().catch(() => null);
-	const status = body?.feedback_status;
-	if (!PM_STATUSES.has(status)) return json({ error: `feedback_status must be one of: ${[...PM_STATUSES].join(', ')}` }, 400);
-
-	const res = await env.DB.prepare('UPDATE feedback SET feedback_status = ? WHERE id = ?').bind(status, id).run();
-	if (!res.meta?.changes) return json({ error: 'Feedback not found' }, 404);
-	return json({ id, feedback_status: status });
-}
-
 async function handleSyncStatus(env) {
 	const { results } = await env.DB.prepare('SELECT * FROM sync_state ORDER BY stream').all();
 	return json({
@@ -151,8 +167,18 @@ export default {
 			if (method === 'GET' && path === '/search') return await handleSearch(url, env);
 			if (method === 'GET' && path === '/sync/status') return await handleSyncStatus(env);
 
-			const statusMatch = path.match(/^\/feedback\/([\w-]+)$/);
-			if (method === 'PATCH' && statusMatch) return await handleStatusUpdate(statusMatch[1], request, env);
+			if (method === 'POST' && path === '/feedback/bulk') return await bulkUpdateFeedback(request, env);
+			const feedbackMatch = path.match(/^\/feedback\/([\w-]+)$/);
+			if (method === 'PATCH' && feedbackMatch) return await updateFeedback(feedbackMatch[1], request, env);
+			const notesMatch = path.match(/^\/feedback\/([\w-]+)\/notes$/);
+			if (notesMatch && method === 'GET') return await listNotes(notesMatch[1], env);
+			if (notesMatch && method === 'POST') return await addNote(notesMatch[1], request, env);
+			const noteMatch = path.match(/^\/notes\/(\d+)$/);
+			if (noteMatch && method === 'DELETE') return await deleteNote(Number(noteMatch[1]), env);
+
+			if (method === 'GET' && path === '/themes') return await listThemes(env);
+			if (method === 'GET' && path === '/digests') return await getDigests(url, env);
+			if (method === 'POST' && path === '/digests/generate') return await handleGenerate(request, env);
 
 			if (path === '/tickets' && method === 'GET') return await listTickets(env);
 			if (path === '/tickets' && method === 'POST') return await createTicket(request, env);
@@ -163,7 +189,7 @@ export default {
 			if (method === 'POST' && (path === '/ingest' || syncMatch)) {
 				if (!isAuthorized(request, env)) return json({ error: 'Unauthorized' }, 401);
 				if (path === '/ingest') return await handleIngest(request, env);
-				const opts = { maxNew: url.searchParams.get('max') };
+				const opts = { maxNew: url.searchParams.get('max'), sinceDays: url.searchParams.get('since_days') };
 				if (syncMatch[1] === 'all') return json(await syncAll(env, opts));
 				const run = SYNCS[syncMatch[1]];
 				if (!run) return json({ error: `Unknown source. Use one of: ${[...Object.keys(SYNCS), 'all'].join(', ')}` }, 404);
@@ -179,6 +205,10 @@ export default {
 	},
 
 	async scheduled(controller, env, ctx) {
+		if (controller.cron === DIGEST_CRON) {
+			ctx.waitUntil(weeklyDigest(env).then((d) => console.log('Weekly digest written for', d.week_start)));
+			return;
+		}
 		ctx.waitUntil(syncAll(env).then((summary) => console.log('Scheduled sync:', JSON.stringify(summary))));
 	},
 };

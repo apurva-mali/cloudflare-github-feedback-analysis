@@ -49,17 +49,41 @@ export function createFakeD1() {
 	};
 }
 
-/** Fake Workers AI: embeddings return fixed vectors; text model returns `analysis` as chat-completions JSON. */
+/**
+ * Deterministic "embedding": a bag-of-words hashed into 128 dims, normalised.
+ * Texts sharing most words get cosine close to 1; unrelated texts stay low.
+ */
+export function fakeEmbed(text) {
+	const v = new Array(128).fill(0);
+	for (const w of String(text).toLowerCase().match(/[a-z0-9]+/g) || []) {
+		let h = 0;
+		for (const ch of w) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+		v[h % 128] += 1;
+	}
+	const n = Math.hypot(...v) || 1;
+	return v.map((x) => x / n);
+}
+
+/** Fake Workers AI: embeddings from fakeEmbed; text model answers by task. */
 export function createFakeAI(analysis = {}) {
-	const calls = { text: 0, embed: 0 };
+	const calls = { text: 0, embed: 0, titles: 0, summaries: 0 };
 	return {
 		calls,
 		async run(model, input) {
 			if (model.includes('bge')) {
 				calls.embed++;
-				return { data: input.text.map(() => new Array(768).fill(0.01)) };
+				return { data: input.text.map(fakeEmbed) };
 			}
 			calls.text++;
+			const system = input.messages[0].content;
+			if (system.includes('{"title"')) {
+				calls.titles++;
+				return { choices: [{ message: { content: '{"title": "Fake theme title"}' } }] };
+			}
+			if (system.includes('{"summary"')) {
+				calls.summaries++;
+				return { choices: [{ message: { content: '{"summary": "Developers mostly talked about uploads."}' } }] };
+			}
 			const body = {
 				sentiment_score: 3,
 				urgency_level: 'Neutral',
@@ -75,15 +99,24 @@ export function createFakeAI(analysis = {}) {
 	};
 }
 
+/** Fake Vectorize with real cosine nearest-neighbour queries. */
 export function createFakeVectorize() {
 	const vectors = new Map();
+	const cos = (a, b) => a.reduce((s, x, i) => s + x * b[i], 0) / (Math.hypot(...a) * Math.hypot(...b) || 1);
 	return {
 		vectors,
 		async upsert(items) {
 			for (const v of items) vectors.set(v.id, v);
 		},
-		async query() {
-			return { matches: [...vectors.keys()].slice(0, 5).map((id) => ({ id, score: 0.9 })) };
+		async insert(items) {
+			for (const v of items) vectors.set(v.id, v);
+		},
+		async query(values, { topK = 5 } = {}) {
+			const matches = [...vectors.values()]
+				.map((v) => ({ id: v.id, score: v.values.length === values.length ? cos(values, v.values) : 0 }))
+				.sort((a, b) => b.score - a.score)
+				.slice(0, topK);
+			return { matches };
 		},
 	};
 }
@@ -190,4 +223,33 @@ export function createScriptedAI(rules) {
 			return { choices: [{ message: { content: JSON.stringify(body) } }] };
 		},
 	};
+}
+
+let rowSeq = 0;
+/** Insert a feedback row directly (bypassing AI) for API-level tests. */
+export function insertFeedback(db, overrides = {}) {
+	const id = overrides.id || `f${++rowSeq}`;
+	const row = {
+		id,
+		feedback_timestamp: new Date().toISOString(),
+		user_id: '@someone',
+		source: 'GitHub',
+		product_category: 'R2',
+		user_type: 'Community',
+		urgency_level: 'Neutral',
+		feedback_type: 'Bug',
+		summary: `Summary ${id}`,
+		recommended_action: 'Look into it',
+		feedback_status: 'Open',
+		original_text: `Text ${id}`,
+		sentiment_score: 3,
+		nps_class: 'Detractor',
+		title: `Title ${id}`,
+		source_url: `https://example.com/${id}`,
+		reactions: 0,
+		...overrides,
+	};
+	const cols = Object.keys(row);
+	db._db.prepare(`INSERT INTO feedback (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...cols.map((c) => row[c]));
+	return row;
 }

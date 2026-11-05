@@ -13,9 +13,10 @@
 		"enabled": true
 	},
 
-	// Pull new GitHub issues and Hacker News posts every hour (at :17 to avoid the top-of-hour rush).
+	// Hourly at :17: pull GitHub + Hacker News, then group new items into themes.
+	// Mondays 13:07 UTC (8:07 New York in winter): write last week's digest.
 	"triggers": {
-		"crons": ["17 * * * *"]
+		"crons": ["17 * * * *", "7 13 * * 1"]
 	},
 
 	/**
@@ -25,11 +26,12 @@
 	 */
 	"vars": {
 		// Comma-separated public repos to read issues from.
-		"GITHUB_REPOS": "cloudflare/workers-sdk",
-		// How far back to look on the very first sync.
-		"GITHUB_BACKFILL_DAYS": "14",
-		// Cap on NEW issues analyzed per run (each costs one LLM call).
-		"GITHUB_MAX_NEW_PER_RUN": "15",
+		"GITHUB_REPOS": "cloudflare/workers-sdk,cloudflare/workerd,cloudflare/cloudflare-docs,cloudflare/agents",
+		// How far back a repo's very first sync looks. Repos already syncing keep
+		// their position; use POST /sync/github?since_days=N for a one-off deeper look.
+		"GITHUB_BACKFILL_DAYS": "60",
+		// Cap on NEW issues analyzed per repo per run (each costs one LLM call).
+		"GITHUB_MAX_NEW_PER_REPO": "15",
 		// Cloudflare staff issues are internal, not customer feedback; set "true" to include them.
 		"GITHUB_INCLUDE_STAFF": "false",
 		// Hacker News: comma-separated search queries (stories + comments).
@@ -37,6 +39,10 @@
 		"HN_BACKFILL_DAYS": "7",
 		// Cap on AI calls for HN per run (includes items the AI rejects as not-feedback).
 		"HN_MAX_NEW_PER_RUN": "15",
+		// Themes: how similar two items must be (cosine, 0-1) to share a theme.
+		// Raise if unrelated items get grouped; lower if obvious duplicates stay apart.
+		"THEME_SIMILARITY": "0.85",
+		"THEME_BATCH": "40",
 		// Text model for analysis (llama-3-8b-instruct was deprecated 2026-05-30).
 		"AI_MODEL": "@cf/zai-org/glm-4.7-flash"
 	},

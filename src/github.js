@@ -165,7 +165,8 @@ export function issueToItem(issue, repo) {
 export function deterministicFields(item, ai = {}) {
 	return {
 		product_category: resolveProduct(item, ai.product_category),
-		feedback_type: feedbackTypeFromLabels(item.labels),
+		// Docs-repo issues are about documentation unless a label says bug/feature.
+		feedback_type: feedbackTypeFromLabels(item.labels) || (item.repo === 'cloudflare/cloudflare-docs' ? 'Docs' : null),
 		urgency_level: urgencyFromSignals(item.labels, item.reactions),
 		user_type: item.author_association === 'CONTRIBUTOR' ? 'Contributor' : 'Community',
 	};
@@ -229,7 +230,11 @@ async function syncRepo(env, repo, budget, opts) {
 	const stream = `github:${repo}`;
 	const backfillDays = Number(env.GITHUB_BACKFILL_DAYS) || DEFAULT_BACKFILL_DAYS;
 	// `since` stays fixed for every page of this run; `cursor` tracks progress.
-	const since = (await getCursor(env, stream)) || new Date(Date.now() - backfillDays * 86400000).toISOString();
+	// A one-off deeper backfill (?since_days=N) restarts from N days ago; already-stored
+	// issues are only refreshed, never re-analyzed or duplicated.
+	const since = opts.sinceDays
+		? new Date(Date.now() - opts.sinceDays * 86400000).toISOString()
+		: (await getCursor(env, stream)) || new Date(Date.now() - backfillDays * 86400000).toISOString();
 	let cursor = since;
 
 	const result = { repo, seen: 0, skipped: 0, updated: 0, created: 0, ai_failures: 0, done: false };
@@ -303,17 +308,17 @@ async function syncRepo(env, repo, budget, opts) {
 }
 
 /** Entry point for the cron trigger and POST /sync/github. */
-export async function syncGitHub(env, { maxNew } = {}) {
+export async function syncGitHub(env, { maxNew, sinceDays } = {}) {
 	const repos = parseRepos(env);
-	let budget = Number(maxNew) || Number(env.GITHUB_MAX_NEW_PER_RUN) || DEFAULT_MAX_NEW_PER_RUN;
-	const opts = { includeStaff: String(env.GITHUB_INCLUDE_STAFF) === 'true' };
+	// Each repo gets its own budget so one busy repo can't starve the others.
+	const perRepo = Number(maxNew) || Number(env.GITHUB_MAX_NEW_PER_REPO) || Number(env.GITHUB_MAX_NEW_PER_RUN) || DEFAULT_MAX_NEW_PER_RUN;
+	const days = Math.min(Math.max(Number(sinceDays) || 0, 0), 365);
+	const opts = { includeStaff: String(env.GITHUB_INCLUDE_STAFF) === 'true', sinceDays: days || null };
 	const results = [];
 
 	for (const repo of repos) {
-		if (budget <= 0) break;
 		try {
-			const r = await syncRepo(env, repo, budget, opts);
-			budget -= r.created;
+			const r = await syncRepo(env, repo, perRepo, opts);
 			results.push(r);
 		} catch (err) {
 			console.error(`GitHub sync failed for ${repo}:`, err?.message || err);

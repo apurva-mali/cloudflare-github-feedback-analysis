@@ -12,9 +12,8 @@
 		"build": "npm --prefix frontend run build",
 		"db:init": "wrangler d1 execute feedback-github-db --local --file=./schema.sql",
 		"db:init:remote": "wrangler d1 execute feedback-github-db --remote --file=./schema.sql",
-		"db:migrate": "wrangler d1 execute feedback-github-db --local --file=./migrations/0001_hackernews_and_scoring.sql",
-		"db:migrate:remote": "wrangler d1 execute feedback-github-db --remote --file=./migrations/0001_hackernews_and_scoring.sql",
-		"db:migrate:tickets:remote": "wrangler d1 execute feedback-github-db --remote --file=./migrations/0002_tickets.sql"
+		"db:migrate": "wrangler d1 migrations apply feedback-github-db --remote",
+		"db:migrate:local": "wrangler d1 migrations apply feedback-github-db --local"
 	},
 	"devDependencies": {
 		"vitest": "~3.2.0",
