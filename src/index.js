@@ -1,22 +1,44 @@
 /**
- * Cloudflare Voice — GitHub feedback edition.
+ * Cloudflare Voice — real feedback edition (GitHub Issues + Hacker News).
  *
  * Routes
  *   GET   /all                 all feedback rows (dashboard)
  *   GET   /search?q=           semantic search via Vectorize
- *   GET   /sync/status         last GitHub sync result per repo
+ *   GET   /sync/status         last sync result per stream
  *   POST  /sync/github         run a GitHub sync now           (admin)
+ *   POST  /sync/hackernews     run a Hacker News sync now      (admin)
+ *   POST  /sync/all            run every source now            (admin)
  *   POST  /ingest              ingest one manual feedback item (admin)
  *   PATCH /feedback/:id        set PM status: Open | Ticket Raised | Resolved
  *
- * Cron: the `scheduled` handler runs the GitHub sync (see triggers in wrangler.jsonc).
+ * Cron: the `scheduled` handler runs every source (see triggers in wrangler.jsonc).
  */
 
 import { CORS_HEADERS, json, isAuthorized } from './http.js';
 import { analyzeFeedback, buildRecord, storeRecords, EMBEDDING_MODEL } from './pipeline.js';
 import { syncGitHub } from './github.js';
+import { syncHackerNews } from './hackernews.js';
 
 const PM_STATUSES = new Set(['Open', 'Ticket Raised', 'Resolved']);
+
+const SYNCS = {
+	github: syncGitHub,
+	hackernews: syncHackerNews,
+};
+
+/** Run sources one after another; one failing never blocks the others. */
+async function syncAll(env, opts = {}) {
+	const out = {};
+	for (const [name, run] of Object.entries(SYNCS)) {
+		try {
+			out[name] = await run(env, opts);
+		} catch (err) {
+			console.error(`${name} sync failed:`, err);
+			out[name] = { error: err?.message || String(err) };
+		}
+	}
+	return out;
+}
 
 function serializeRow(row) {
 	let labels = [];
@@ -116,10 +138,15 @@ export default {
 			const statusMatch = path.match(/^\/feedback\/([\w-]+)$/);
 			if (method === 'PATCH' && statusMatch) return await handleStatusUpdate(statusMatch[1], request, env);
 
-			if (method === 'POST' && (path === '/ingest' || path === '/sync/github')) {
+			const syncMatch = path.match(/^\/sync\/(\w+)$/);
+			if (method === 'POST' && (path === '/ingest' || syncMatch)) {
 				if (!isAuthorized(request, env)) return json({ error: 'Unauthorized' }, 401);
 				if (path === '/ingest') return await handleIngest(request, env);
-				return json(await syncGitHub(env, { maxNew: url.searchParams.get('max') }));
+				const opts = { maxNew: url.searchParams.get('max') };
+				if (syncMatch[1] === 'all') return json(await syncAll(env, opts));
+				const run = SYNCS[syncMatch[1]];
+				if (!run) return json({ error: `Unknown source. Use one of: ${[...Object.keys(SYNCS), 'all'].join(', ')}` }, 404);
+				return json(await run(env, opts));
 			}
 		} catch (err) {
 			console.error(`${method} ${path} failed:`, err);
@@ -131,8 +158,6 @@ export default {
 	},
 
 	async scheduled(controller, env, ctx) {
-		ctx.waitUntil(
-			syncGitHub(env).then((summary) => console.log('GitHub sync:', JSON.stringify(summary)))
-		);
+		ctx.waitUntil(syncAll(env).then((summary) => console.log('Scheduled sync:', JSON.stringify(summary))));
 	},
 };

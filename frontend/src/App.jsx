@@ -677,14 +677,14 @@ function App() {
                                         onClick={(e) => e.stopPropagation()}
                                       >
                                         <ExternalLink size={14} />
-                                        {item.repo ? `${item.repo}` : 'View original'}
+                                        {item.repo || (item.source === 'Hacker News' ? 'View on Hacker News' : 'View original')}
                                       </a>
                                       {item.source_state && (
                                         <span className={`upstream-state ${item.source_state}`}>
                                           {item.source_state === 'closed' ? 'Closed on GitHub' : 'Open on GitHub'}
                                         </span>
                                       )}
-                                      <span className="meta-stat" title="Reactions">
+                                      <span className="meta-stat" title={item.source === 'Hacker News' ? 'Points' : 'Reactions'}>
                                         <ThumbsUp size={14} /> {item.reactions}
                                       </span>
                                       <span className="meta-stat" title="Comments">
@@ -723,7 +723,7 @@ function App() {
               <div className="kpi-strip">
 
                 <div className="kpi-card">
-                  <div className="kpi-label">NPS Score</div>
+                  <div className="kpi-label" title="% positive (sentiment 8-10) minus % negative (1-4), from -100 to +100">Sentiment Index</div>
                   <div style={{ width: '100%', height: '120px', position: 'relative' }}>
                     <ResponsiveContainer>
                       <PieChart>
@@ -920,7 +920,7 @@ function App() {
                 </div>
 
                 <div className="chart-card">
-                  <h3>NPS Over Time</h3>
+                  <h3>Sentiment Index Over Time</h3>
                   <ResponsiveContainer width="100%" height={300}>
                     <LineChart data={getNPSOverTime()}>
                       <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
@@ -955,7 +955,7 @@ function App() {
                 </div>
                 <p>
                   Based on the current data, feedback volume shows {kpis.total > 0 ? 'active' : 'limited'} engagement
-                  across {getProductDistribution().length} product categories. The NPS score of {kpis.nps} indicates
+                  across {getProductDistribution().length} product categories. The sentiment index of {kpis.nps} indicates
                   {kpis.nps > 0 ? ' positive' : ' negative'} sentiment overall. Key areas requiring attention include
                   {getProductDistribution().slice(0, 2).map(p => ` ${p.name}`).join(' and')}.
                 </p>

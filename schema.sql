@@ -21,13 +21,13 @@ CREATE TABLE feedback (
   nps_class TEXT,
 
   -- Provenance for real (non-synthetic) feedback
-  external_id TEXT UNIQUE,       -- e.g. "gh:cloudflare/workers-sdk#1234"; NULL for manual /ingest items
+  external_id TEXT UNIQUE,       -- "gh:cloudflare/workers-sdk#1234" | "hn:41234567"; NULL for manual /ingest items
   source_url TEXT,               -- link back to the original post
   title TEXT,
   repo TEXT,                     -- e.g. "cloudflare/workers-sdk"
   labels TEXT,                   -- JSON array of label names
   source_state TEXT,             -- upstream state: open | closed
-  reactions INTEGER DEFAULT 0,   -- total reactions (a rough "how many people care" signal)
+  reactions INTEGER DEFAULT 0,   -- GitHub reactions / HN points (rough "how many people care" signal)
   comments_count INTEGER DEFAULT 0,
   source_updated_at TEXT,
   ingested_at TEXT
@@ -35,6 +35,14 @@ CREATE TABLE feedback (
 
 CREATE INDEX idx_feedback_timestamp ON feedback (feedback_timestamp);
 CREATE INDEX idx_feedback_source ON feedback (source);
+
+-- Fetched items judged not to be product feedback, so they are never re-analyzed.
+DROP TABLE IF EXISTS skipped_items;
+CREATE TABLE skipped_items (
+  external_id TEXT PRIMARY KEY,
+  reason TEXT,
+  skipped_at TEXT
+);
 
 -- One row per ingestion stream, remembering how far we have read.
 DROP TABLE IF EXISTS sync_state;

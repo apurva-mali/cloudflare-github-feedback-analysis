@@ -17,7 +17,8 @@ const SYSTEM_PROMPT = `You are a Product Feedback AI for Cloudflare's developer 
 Analyze the feedback and return ONLY a JSON object with these keys:
 
 {
-  "sentiment_score": integer 1-10 (10 = thrilled, 1 = angry or blocked),
+  "relevant": true if the text expresses an experience, opinion, complaint, praise or request about a Cloudflare product; false if Cloudflare is only mentioned in passing, as news, or the text is about something else,
+  "sentiment_score": integer 1-10 (1 = angry or blocked, 5 = neutral or matter-of-fact, 10 = delighted),
   "urgency_level": "High" | "Neutral" | "Low",
   "user_type": "Enterprise" | "SMB" | "Individual" | "Unknown",
   "product_category": the Cloudflare product it is about, e.g. "Workers", "Wrangler", "Pages", "R2", "D1", "KV", "Durable Objects", "Queues", "Workers AI", "Vectorize", "Zero Trust", or "Unknown",
@@ -28,13 +29,19 @@ Analyze the feedback and return ONLY a JSON object with these keys:
 
 Guidance:
 - A bug report that blocks deploys or production traffic is "High" urgency.
-- Polite feature requests are usually "Neutral" urgency and sentiment 5-7.
+- Polite feature requests and neutral questions are usually "Neutral" urgency and sentiment 5-6.
+- Praise ("switched to R2 and our bill dropped", "Workers DX is great") is sentiment 8-10.
 - Ignore stack traces and log noise when judging sentiment; judge the human's tone and impact.
 No markdown, no prose, JSON only.`;
 
+/**
+ * Bucket the 1-10 sentiment score. 5 means neutral, so only clearly negative
+ * feedback (1-4) counts against the index. (Classic NPS treats 0-6 as
+ * detractors, but that scale is "likelihood to recommend", not mood.)
+ */
 export function npsFromSentiment(score) {
-	if (score >= 9) return 'Promoter';
-	if (score >= 7) return 'Passive';
+	if (score >= 8) return 'Promoter';
+	if (score >= 5) return 'Passive';
 	return 'Detractor';
 }
 
@@ -84,7 +91,12 @@ export async function analyzeFeedback(env, text, context = '') {
 			chat_template_kwargs: { enable_thinking: false },
 		});
 		const data = parseModelJson(extractModelText(aiResponse));
-		return { ...data, sentiment_score: clampScore(data.sentiment_score), _ai_ok: true };
+		return {
+			...data,
+			relevant: data.relevant !== false && data.relevant !== 'false',
+			sentiment_score: clampScore(data.sentiment_score),
+			_ai_ok: true,
+		};
 	} catch (err) {
 		console.error('AI analysis failed, using defaults:', err?.message || err);
 		return {
@@ -95,6 +107,7 @@ export async function analyzeFeedback(env, text, context = '') {
 			feedback_type: 'UX',
 			summary: text.slice(0, 80),
 			recommended_action: 'Review manually (AI analysis unavailable)',
+			relevant: true, // when unsure, keep it for a human to look at
 			_ai_ok: false,
 		};
 	}

@@ -120,3 +120,70 @@ export function mockGitHubFetch(issuesByRepo) {
 	};
 	return requests;
 }
+
+// HN fixtures are dated within the last day so they fall inside the backfill window.
+const HN_BASE = Math.floor(Date.now() / 1000) - 86400;
+
+/** Build an Algolia HN hit (comment by default). */
+export function hnHit(id, overrides = {}) {
+	return {
+		objectID: String(id),
+		_tags: ['comment', `author_u${id}`, 'story_1'],
+		author: `u${id}`,
+		comment_text: `We moved our image pipeline to Cloudflare R2 last month and our egress bill basically disappeared. Comment ${id}.`,
+		story_title: 'Show HN: Something on Cloudflare',
+		created_at: new Date((HN_BASE + id * 60) * 1000).toISOString(),
+		created_at_i: HN_BASE + id * 60,
+		points: null,
+		...overrides,
+	};
+}
+
+/** Replace global fetch with a fake Algolia HN API serving `hitsByQuery[query]`, honouring numericFilters/page. */
+export function mockHnFetch(hitsByQuery) {
+	const requests = [];
+	globalThis.fetch = async (url) => {
+		const u = new URL(url);
+		requests.push(u);
+		const since = Number((u.searchParams.get('numericFilters') || '').split('>=')[1] || 0);
+		const perPage = Number(u.searchParams.get('hitsPerPage'));
+		const page = Number(u.searchParams.get('page') || 0);
+		const all = (hitsByQuery[u.searchParams.get('query')] || [])
+			.filter((h) => h.created_at_i >= since)
+			.sort((a, b) => b.created_at_i - a.created_at_i); // newest first, like search_by_date
+		return new Response(
+			JSON.stringify({ hits: all.slice(page * perPage, (page + 1) * perPage), nbPages: Math.ceil(all.length / perPage) }),
+			{ status: 200 }
+		);
+	};
+	return requests;
+}
+
+/** Fake AI whose analysis depends on the text: `rules` is [[regex, analysisOverrides], ...]. */
+export function createScriptedAI(rules) {
+	const calls = { text: 0, embed: 0 };
+	return {
+		calls,
+		async run(model, input) {
+			if (model.includes('bge')) {
+				calls.embed++;
+				return { data: input.text.map(() => new Array(768).fill(0.01)) };
+			}
+			calls.text++;
+			const text = input.messages.at(-1).content;
+			const match = rules.find(([re]) => re.test(text));
+			const body = {
+				relevant: true,
+				sentiment_score: 5,
+				urgency_level: 'Neutral',
+				user_type: 'Individual',
+				product_category: 'Unknown',
+				feedback_type: 'UX',
+				summary: 's',
+				recommended_action: 'a',
+				...(match ? match[1] : {}),
+			};
+			return { choices: [{ message: { content: JSON.stringify(body) } }] };
+		},
+	};
+}
