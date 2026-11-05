@@ -66,10 +66,28 @@ export function fullDate(iso) {
 
 export const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0);
 
-const isReply = (row) => Boolean(row.title && row.title.startsWith('Re: '));
+// Values written by the AI or older code can be any type; the UI only ever sees clean strings.
+const str = (v, fallback = '') => {
+  if (v == null) return fallback;
+  if (typeof v === 'string') return v.trim() || fallback;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return fallback;
+  }
+};
+
+function normUrgency(v) {
+  const u = str(v).toLowerCase();
+  if (u.startsWith('high') || u === 'urgent' || u === 'critical') return 'High';
+  if (u.startsWith('low')) return 'Low';
+  return 'Neutral';
+}
 
 function firstSentence(text) {
-  const s = text.split(/(?<=[.!?])\s/)[0] || text;
+  const m = text.match(/^[\s\S]*?[.!?](?=\s|$)/);
+  const s = (m ? m[0] : text).trim();
   return s.length > 140 ? `${s.slice(0, 137)}…` : s;
 }
 
@@ -78,37 +96,56 @@ export const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0
 
 export const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-/** Normalise a row from GET /all into what the UI uses. */
+function parseLabels(v) {
+  if (Array.isArray(v)) return v.map((l) => str(l)).filter(Boolean);
+  if (typeof v === 'string') {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? parsed.map((l) => str(l)).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/** Normalise a row from GET /all into what the UI uses. Never throws. */
 export function normalizeFeedback(row) {
-  const text = row.original_text || row.text || '';
+  const text = str(row.original_text ?? row.text);
+  const title = str(row.title) || null;
+  const reply = Boolean(title && title.startsWith('Re: '));
+  const summary = str(row.summary);
+  const ts = str(row.feedback_timestamp ?? row.created_at) || null;
+  const rawScore = Math.round(Number(row.sentiment_score));
+  const score = Number.isFinite(rawScore) && rawScore >= 1 ? Math.min(10, rawScore) : 5;
   return {
-    id: row.id,
-    timestamp: row.feedback_timestamp || row.created_at || null,
-    author: row.user_id || null,
-    source: row.source || 'Unknown',
-    product: row.product_category || 'Unknown',
-    userType: row.user_type || 'Unknown',
-    urgency: row.urgency_level || 'Neutral',
-    type: row.feedback_type || 'Other',
-    summary: row.summary || '',
-    action: row.recommended_action || '',
-    status: row.feedback_status || 'Open',
+    id: str(row.id),
+    timestamp: ts && Number.isFinite(new Date(ts).getTime()) ? ts : null,
+    author: str(row.user_id) || null,
+    source: str(row.source, 'Unknown'),
+    product: str(row.product_category, 'Unknown'),
+    userType: str(row.user_type, 'Unknown'),
+    urgency: normUrgency(row.urgency_level),
+    type: str(row.feedback_type, 'Other'),
+    summary,
+    action: str(row.recommended_action),
+    status: str(row.feedback_status, 'Open'),
     text,
-    score: Number(row.sentiment_score) || 5,
-    sentiment: sentimentOf(row.sentiment_score),
-    title: row.title || null,
+    score,
+    sentiment: sentimentOf(score),
+    title,
     // A Hacker News comment's title is its thread; what the person said is more useful.
-    headline: isReply(row) ? row.summary || firstSentence(text) : row.title || row.summary || firstSentence(text),
-    thread: isReply(row) ? row.title.replace(/^Re: /, '') : null,
-    url: row.source_url || null,
-    repo: row.repo || null,
-    labels: Array.isArray(row.labels) ? row.labels : [],
-    upstreamState: row.source_state || null,
+    headline: (reply ? summary || firstSentence(text) : title || summary || firstSentence(text)) || 'Untitled feedback',
+    thread: reply ? title.replace(/^Re: /, '') : null,
+    url: str(row.source_url) || null,
+    repo: str(row.repo) || null,
+    labels: parseLabels(row.labels),
+    upstreamState: str(row.source_state) || null,
     reactions: Number(row.reactions) || 0,
     comments: Number(row.comments_count) || 0,
     ticketId: row.ticket_id ?? null,
-    ticketStatus: row.ticket_status ?? null,
-    ticketPriority: row.ticket_priority ?? null,
+    ticketStatus: str(row.ticket_status) || null,
+    ticketPriority: str(row.ticket_priority) || null,
   };
 }
 

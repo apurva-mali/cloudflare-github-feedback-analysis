@@ -1678,3 +1678,27 @@ button.voice:hover .voice-text {
     transition: none !important;
   }
 }
+
+/* ---------- Crash screen ---------- */
+.crash {
+  max-width: 640px;
+  margin: 80px auto;
+  padding: 0 24px;
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+.crash h1 {
+  font-size: 20px;
+}
+.crash pre {
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
+}
